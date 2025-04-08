@@ -16,6 +16,17 @@ composer require salvatore/backup-database
 php artisan vendor:publish --tag="backup-database-config"
 ```
 
+## For test use 
+
+```
+php artisan tink
+```
+    ### after
+
+    ```
+    BackupDatabase::backup();
+    ```
+
 ## RoadMap
 
 ### create table for store list of backups
