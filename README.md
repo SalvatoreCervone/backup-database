@@ -26,7 +26,7 @@ after
 BackupDatabase::backup();
 ```
 
-This return result in terminal and crate backup in config.destinationpath
+This return result in terminal and create backup in config.destinationpath
 
 ## RoadMap
 
