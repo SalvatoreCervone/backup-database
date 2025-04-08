@@ -27,6 +27,8 @@ php artisan tink
 BackupDatabase::backup();
 ```
 
+This return result in terminal and crate backup in config.destinationpath
+
 ## RoadMap
 
 ### create table for store list of backups
