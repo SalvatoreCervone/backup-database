@@ -2,6 +2,7 @@
 
 // config for Salvatore/BackupDatabase
 return [
+    'connection' => env('DB_CONNECTION'),
     'dbname' => env('DB_DATABASE'),
     'dbhost' => env('DB_HOST'),
     'daily' => false,
