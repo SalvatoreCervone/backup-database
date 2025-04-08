@@ -26,7 +26,7 @@ class BackupDatabase
         $password = env('DB_PASSWORD');
         $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
         $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $user . ' -P ' . $password . ' -Q "' . $script . '"');
-        return $result
+        return $result;
     }
 
     public function restore()
