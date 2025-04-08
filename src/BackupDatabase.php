@@ -18,13 +18,15 @@ class BackupDatabase
     {
         // "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,      MEDIANAME = 'SQLServerBackups',      NAME = 'Full Backup of SQLTestDB';"
         $dbname = Config::get('backup-database.dbname');
-
         $dbhost = Config::get('backup-database.dbhost');
         $daily = Config::get('backup-database.daily');
         $destinationpath = Config::get('backup-database.destinationpath');
         $name = $dbname  .  ($daily ? "_" . Carbon::now()->format('Y-m-d') : "") . ".bak";
+        $user = env('DB_USERNAME');
+        $password = env('DB_PASSWORD');
         $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
-        shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  env('DB_USER') . ' -P ' . env('DB_PASSWORD') . ' -Q "' . $script . '"');
+        $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $user . ' -P ' . $password . ' -Q "' . $script . '"');
+        return $result
     }
 
     public function restore()
