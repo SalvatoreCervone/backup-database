@@ -17,13 +17,14 @@ class BackupDatabase
     public function backup()
     {
         // "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,      MEDIANAME = 'SQLServerBackups',      NAME = 'Full Backup of SQLTestDB';"
-        $dbname = Config::get('dbname');
-        $dbhost = Config::get('dbhost');
-        $daily = Config::get('daily');
-        $destinationpath = Config::get('destinationpath');
-        $name = $dbname  .  ($daily ? "_" . Carbon::now()->format('Y-m-d') : "") . ".bak";
+        $dbname = Config::get('backup-database.dbname');
 
-        return  "BACKUP DATABASE " . $dbname . " TO DISK = '" . $destinationpath . $name . "'   WITH FORMAT,   NAME = '" . $name . "';";
+        $dbhost = Config::get('backup-database.dbhost');
+        $daily = Config::get('backup-database.daily');
+        $destinationpath = Config::get('backup-database.destinationpath');
+        $name = $dbname  .  ($daily ? "_" . Carbon::now()->format('Y-m-d') : "") . ".bak";
+        $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
+        shell_exec('sqlcmd -S ' . $dbhost . ' -U sa -P Pezzotto.01 -Q "' . $script . '"');
     }
 
     public function restore()
