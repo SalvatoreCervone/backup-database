@@ -1,6 +1,6 @@
 {
     "name": "salvatore/backup-database",
-    "description": "This is my package backup-database",
+    "description": "This package send backup-database",
     "keywords": [
         "Salvatore",
         "laravel",
