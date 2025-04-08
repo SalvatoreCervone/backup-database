@@ -10,7 +10,7 @@ return [
             // 'db_username' => env('DB_USERNAME'),
             // 'db_password' => env('DB_PASSWORD'),
             'daily' => false,
-            'datetimeFormat' => 'Y-m-d H:i',
+            'datetimeFormat' => 'Y-m-d H-i',
             'destinationpath' => 'c:\tmp\\',
         ]
     ],
