@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton\Commands;
+namespace Salvatore\BackupDatabase\Commands;
 
 use Illuminate\Console\Command;
 
-class SkeletonCommand extends Command
+class BackupDatabaseCommand extends Command
 {
-    public $signature = 'skeleton';
+    public $signature = 'backup-database';
 
     public $description = 'My command';
 
