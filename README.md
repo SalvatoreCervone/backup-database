@@ -21,8 +21,7 @@ php artisan vendor:publish --tag="backup-database-config"
 ```
 php artisan tink
 ```
-### after
-
+after
 ```
 BackupDatabase::backup();
 ```
