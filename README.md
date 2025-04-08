@@ -31,7 +31,7 @@ This return result in terminal and create backup in config.destinationpath
 ## RoadMap
 
 ### create table for store list of backups
-### create view for list stored buckups
+### create view for list stored backups
 
 
 
