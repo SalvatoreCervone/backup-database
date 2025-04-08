@@ -6,7 +6,7 @@ Actually V1 used for only backup MSSQL Database with Driver Sqlsrv
 
 ## 1 or more Database
 
-You would backup one or more database in single operation.
+You can backup one or more database in single operation.
 In config file you add connection name of you single or multi database and send backup
 example of single:
 ```
