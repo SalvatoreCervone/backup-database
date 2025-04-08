@@ -2,7 +2,10 @@
 
 namespace Salvatore\BackupDatabase;
 
-use PSpell\Config;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Config;
+
+
 
 class BackupDatabase
 {
