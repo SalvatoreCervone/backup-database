@@ -24,7 +24,7 @@ class BackupDatabase
         $destinationpath = Config::get('backup-database.destinationpath');
         $name = $dbname  .  ($daily ? "_" . Carbon::now()->format('Y-m-d') : "") . ".bak";
         $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
-        shell_exec('sqlcmd -S ' . $dbhost . ' -U sa -P Pezzotto.01 -Q "' . $script . '"');
+        shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  env('DB_USER') . ' -P ' . env('DB_PASSWORD') . ' -Q "' . $script . '"');
     }
 
     public function restore()
