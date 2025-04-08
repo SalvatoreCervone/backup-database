@@ -21,24 +21,19 @@ class BackupDatabase
             $driver = config("database.connections.{$connectionDatabase}.driver");
 
             if ($driver == 'sqlsrv') {
-                return $this->backupMssql($connection);
+                $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
+                $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
+                $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
+                $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
+                $daily = $connection['daily'];
+                $destinationpath = $connection['destinationpath'];
+                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
+                $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
+                $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                return $result;
             }
             throw new \Exception("Unsupported database driver: {$driver}");
         }
-    }
-
-    private function backupMssql($connection)
-    {
-        $dbhost = $connection['dbhost'];
-        $dbname = $connection['dbname'];
-        $daily = $connection['daily'];
-        $destinationpath = $connection['destinationpath'];
-        $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
-        $user = $connection['db_username'];
-        $password = $connection['db_password'];
-        $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
-        $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $user . ' -P ' . $password . ' -Q "' . $script . '"');
-        return $result;
     }
 
     public function restore()
