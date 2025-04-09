@@ -19,7 +19,7 @@ class BackupDatabaseServiceProvider extends PackageServiceProvider
             ->name('backup-database')
             ->hasConfigFile()
             ->hasViews()
-            ->hasRoute('web')
+            ->hasRoute('backups')
             // ->hasMigration('create_backup_database_table')
             // ->hasCommand(BackupDatabaseCommand::class)
         ;
