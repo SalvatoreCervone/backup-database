@@ -63,10 +63,15 @@ BackupDatabase::backup();
 
 This return result in terminal and create backup in config.destinationpath
 
-## RoadMap
+## VIEW
 
-### create table for store list of backups
-### create view for list stored backups
+In the blade view 
+```
+http://127.0.0.1:8000/backups
+```
+ you have a list of your backup of your driver connection.
+In this view you have information of backup and one button for delete a backup
+
 
 
 
