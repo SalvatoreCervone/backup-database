@@ -42,7 +42,7 @@ example:
 ## For install:
 
 ```
-composer require salvatore/backup-database
+composer require salvatorecervone/backup-database
 ```
 
 ## For publish config 

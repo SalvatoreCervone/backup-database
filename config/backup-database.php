@@ -1,6 +1,6 @@
 <?php
 
-// config for Salvatore/BackupDatabase
+// config for salvatorecervone/BackupDatabase
 return [
     'listconnections' => [
         [

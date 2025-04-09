@@ -1,12 +1,12 @@
 {
-    "name": "salvatore/backup-database",
+    "name": "salvatorecervone/backup-database",
     "description": "This package send backup-database",
     "keywords": [
-        "Salvatore",
+        "SalvatoreCervone",
         "laravel",
         "backup-database"
     ],
-    "homepage": "https://github.com/salvatore/backup-database",
+    "homepage": "https://github.com/SalvatoreCervone/backup-database",
     "license": "MIT",
     "authors": [
         {
@@ -58,13 +58,12 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Salvatore\\BackupDatabase\\BackupDatabaseServiceProvider"
+                "SalvatoreCervone\\BackupDatabase\\BackupDatabaseServiceProvider"
             ],
             "aliases": {
-                "BackupDatabase": "Salvatore\\BackupDatabase\\Facades\\BackupDatabase"
+                "BackupDatabase": "SalvatoreCervone\\BackupDatabase\\Facades\\BackupDatabase"
             }
         }
     },
-
     "prefer-stable": true
 }
