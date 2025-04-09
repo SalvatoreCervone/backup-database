@@ -10,14 +10,7 @@ Route::get('/backups', function () {
     ]);
 })->name('backups.index');
 
-Route::get(
-    '/backup/delete',
-    function () {
-        return view('backup-database::backup-delete', [
-            'file' => request('file'),
-        ]);
-    }
-)->name('backup.delete.get');
+
 
 Route::post('/backup/delete', [BackupDatabaseClass::class, 'delete'])->name('backup.delete');
-Route::post('/backup/download', [BackupDatabaseClass::class, 'download'])->name('backup.download');
+
