@@ -17,9 +17,7 @@ class BackupDatabase
         $listconnections = config('backup-database.listconnections');
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
-
             $driver = config("database.connections.{$connectionDatabase}.driver");
-
             if ($driver == 'sqlsrv') {
                 $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
                 $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
@@ -43,23 +41,37 @@ class BackupDatabase
 
     public function getStatus()
     {
-        // Get status logic here
+        $listBackups = null;
+        $listconnections = config('backup-database.listconnections');
+        foreach ($listconnections as $connection) {
+            $connectionDatabase = $connection['connection'];
+            $listBackups[$connectionDatabase] = null;
+            $driver = config("database.connections.{$connectionDatabase}.driver");
+            if ($driver == 'sqlsrv') {
+                $destinationpath = $connection['destinationpath'];
+                foreach (glob($destinationpath . "*.bak") as $file) {
+                    $listBackups[$connectionDatabase][] = [
+                        'name' => basename($file),
+                        'size' => filesize($file),
+                        'modified' => date("F d Y H:i:s.", filemtime($file)),
+                        'destination' => $destinationpath,
+                    ];
+                }
+            }
+        }
+        return $listBackups;
+    }
+    public function delete()
+    {
+        $file = request()->input('file');
+
+        if (file_exists($file)) {
+            unlink($file);
+            return true;
+        }
+        return false;
     }
 
-    public function setConfig($config)
-    {
-        // Set configuration logic here
-    }
-
-    public function getConfig()
-    {
-        // Get configuration logic here
-    }
-
-    public function validateConfig($config)
-    {
-        // Validate configuration logic here
-    }
 
     public function log($message)
     {
