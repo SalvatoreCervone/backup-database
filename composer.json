@@ -30,13 +30,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Salvatore\\BackupDatabase\\": "src/",
-            "Salvatore\\BackupDatabase\\Database\\Factories\\": "database/factories/"
+            "SalvatoreCervone\\BackupDatabase\\": "src/",
+            "SalvatoreCervone\\BackupDatabase\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Salvatore\\BackupDatabase\\Tests\\": "tests/",
+            "SalvatoreCervone\\BackupDatabase\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/"
         }
     },
