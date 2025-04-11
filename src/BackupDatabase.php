@@ -3,6 +3,7 @@
 namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
+use PSpell\Config;
 
 class BackupDatabase
 {
@@ -14,12 +15,17 @@ class BackupDatabase
     public function backup()
     {
         // "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,      MEDIANAME = 'SQLServerBackups',      NAME = 'Full Backup of SQLTestDB';"
+
+
         $result = null;
         $listconnections = config('backup-database.listconnections');
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
+            $day_for_delete = $connection['day_for_delete'] ?? 0;
             if ($driver == 'sqlsrv') {
+                if ($day_for_delete > 0) {
+                }
                 $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
                 $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
                 $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
@@ -38,7 +44,6 @@ class BackupDatabase
 
                 $result[] = "Unsupported database driver: {$driver}";
             }
-
         }
         return $result;
     }
@@ -74,6 +79,11 @@ class BackupDatabase
     {
         $file = request()->input('file');
 
+        return $this->deleteFile($file);
+    }
+
+    private function deleteFile($file)
+    {
         if (file_exists($file)) {
             unlink($file);
             return true;
@@ -81,11 +91,21 @@ class BackupDatabase
         return false;
     }
 
-
-    public function log($message)
+    function deleteAfter($day_for_delete, $filename)
     {
-        // Log message logic here
+
+        $day_for_delete = $day_for_delete ?? 0;
+
+        if (file_exists($filename)) {
+            if (Carbon::parse(filemtime($filename))->subDays(-$day_for_delete)->isPast()) {
+                // dd(filemtime($filename), time() - ($day_for_delete * 86400));
+                unlink($filename);
+            }
+            return true;
+        }
+        return false;
     }
+
 
     private function createFolder($destinationpath)
     {

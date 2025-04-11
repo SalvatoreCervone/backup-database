@@ -12,6 +12,7 @@ return [
             'daily' => false,
             'datetimeFormat' => 'Y-m-d H-i',
             'destinationpath' => 'c:\tmp\\',
+            'day_for_delete' => 1,
         ]
     ],
     // 'base' => "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,    NAME = 'Full Backup of SQLTestDB';"

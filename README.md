@@ -70,7 +70,10 @@ In the blade view
 http://127.0.0.1:8000/backups
 ```
  you have a list of your backup of your driver connection.
-In this view you have information of backup and one button for delete a backup
+
+In this view you have information of backup and :
+one button for delete a single backup
+one button for lunch all backups
 
 
 
