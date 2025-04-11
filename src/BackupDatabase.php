@@ -14,6 +14,7 @@ class BackupDatabase
     public function backup()
     {
         // "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,      MEDIANAME = 'SQLServerBackups',      NAME = 'Full Backup of SQLTestDB';"
+        $result = null;
         $listconnections = config('backup-database.listconnections');
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
@@ -29,15 +30,17 @@ class BackupDatabase
                 if ($resultCreateFolder['status'] == false) {
                     $result[] = $resultCreateFolder['error'];
                     continue;
-
                 }
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
-                $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
-                return $result;
+                $result[] = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+            } else {
+
+                $result[] = "Unsupported database driver: {$driver}";
             }
-            throw new \Exception("Unsupported database driver: {$driver}");
+
         }
+        return $result;
     }
 
     public function restore()
