@@ -97,7 +97,7 @@ class BackupDatabase
         $day_for_delete = $day_for_delete ?? 0;
 
         if (file_exists($filename)) {
-            if (Carbon::parse(filemtime($filename))->subDays(-$day_for_delete)->isPast()) {
+            if (Carbon::parse(filemtime($filename))->subDays($day_for_delete)->isPast()) {
                 // dd(filemtime($filename), time() - ($day_for_delete * 86400));
                 unlink($filename);
             }
