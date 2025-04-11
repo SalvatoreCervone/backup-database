@@ -1,20 +1,16 @@
 <?php
 
-namespace Salvatore\BackupDatabase;
+namespace SalvatoreCervone\BackupDatabase;
 
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Salvatore\BackupDatabase\Commands\BackupDatabaseCommand;
+// use Salvatore\BackupDatabase\Commands\BackupDatabaseCommand;
 
 class BackupDatabaseServiceProvider extends PackageServiceProvider
 {
     public function configurePackage(Package $package): void
     {
-        /*
-         * This class is a Package Service Provider
-         *
-         * More info: https://github.com/spatie/laravel-package-tools
-         */
+
         $package
             ->name('backup-database')
             ->hasConfigFile()

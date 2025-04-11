@@ -1,16 +1,16 @@
 <?php
 
-namespace Salvatore\BackupDatabase\Facades;
+namespace SalvatoreCervone\BackupDatabase\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @see \Salvatore\BackupDatabase\BackupDatabase
+ * @see \SalvatoreCervone\BackupDatabase\BackupDatabase
  */
 class BackupDatabase extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return \Salvatore\BackupDatabase\BackupDatabase::class;
+        return \SalvatoreCervone\BackupDatabase\BackupDatabase::class;
     }
 }

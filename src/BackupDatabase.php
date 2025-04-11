@@ -1,6 +1,6 @@
 <?php
 
-namespace Salvatore\BackupDatabase;
+namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
 
