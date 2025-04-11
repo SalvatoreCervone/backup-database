@@ -1,8 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Salvatore\BackupDatabase\Facades\BackupDatabase;
-use Salvatore\BackupDatabase\BackupDatabase as BackupDatabaseClass;
+use SalvatoreCervone\BackupDatabase\Facades\BackupDatabase;
+use SalvatoreCervone\BackupDatabase\BackupDatabase as BackupDatabaseClass;
 
 Route::get('/backups', function () {
     return view('backup-database::backups', [
