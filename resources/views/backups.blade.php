@@ -32,7 +32,6 @@
                     file: file
                 })
                 .then(function(response) {
-                    console.log(response);
                     if (response.status === 200) {
                         alert("Backup deleted successfully.");
                         location.reload();
@@ -47,7 +46,24 @@
         }
         // window.open("{{ route('backup.delete') }}?file=" + file, "_blank", "width=400,height=300");
     }
+
+    function createAllBackup() {
+        axios.post("{{ route('backup.create') }}")
+            .then(function(response) {
+                if (response.status === 200) {
+                    alert("Backup created successfully.");
+                    location.reload();
+                } else {
+                    alert("Error creating backup: " + response.data.message);
+                }
+            })
+            .catch(function(error) {
+                console.error(error);
+                alert("An error occurred while creating the backup.");
+            });
+    }
 </script>
+<input type="button" onclick="createAllBackup()" value="Create all Backup" />
 @if (!$listBackups)
     <h1>No backups found</h1>
 @else

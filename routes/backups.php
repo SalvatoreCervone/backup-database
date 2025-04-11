@@ -13,4 +13,4 @@ Route::get('/backups', function () {
 
 
 Route::post('/backup/delete', [BackupDatabaseClass::class, 'delete'])->name('backup.delete');
-
+Route::post('/backup/create', [BackupDatabaseClass::class, 'backup'])->name('backup.create');

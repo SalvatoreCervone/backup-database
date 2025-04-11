@@ -25,6 +25,12 @@ class BackupDatabase
                 $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
                 $daily = $connection['daily'];
                 $destinationpath = $connection['destinationpath'];
+                $resultCreateFolder = $this->createFolder($destinationpath);
+                if ($resultCreateFolder['status'] == false) {
+                    $result[] = $resultCreateFolder['error'];
+                    continue;
+
+                }
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
                 $result = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
@@ -76,5 +82,16 @@ class BackupDatabase
     public function log($message)
     {
         // Log message logic here
+    }
+
+    private function createFolder($destinationpath)
+    {
+        if (!is_dir($destinationpath)) {
+            mkdir($destinationpath, 0777, true);
+        }
+        if (!is_writable($destinationpath)) {
+            return ['status' => false, 'error' => "Destination path is not writable: {$destinationpath}"];
+        }
+        return ['status' => true];
     }
 }
