@@ -19,33 +19,37 @@ class BackupDatabase
 
         $result = null;
         $listconnections = config('backup-database.listconnections');
+
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
-            $day_for_delete = $connection['day_for_delete'] ?? 0;
             if ($driver == 'sqlsrv') {
-                if ($day_for_delete > 0) {
-                }
                 $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
                 $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
                 $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
                 $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
+                $day_for_delete = $connection['day_for_delete'] ?? null;
                 $daily = $connection['daily'];
                 $destinationpath = $connection['destinationpath'];
+                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
+
+                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $day_for_delete);
+
                 $resultCreateFolder = $this->createFolder($destinationpath);
                 if ($resultCreateFolder['status'] == false) {
                     $result[] = $resultCreateFolder['error'];
                     continue;
                 }
-                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
-                $result[] = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                $result[] = ['status' => true, 'message' => $resultShell];
             } else {
 
-                $result[] = "Unsupported database driver: {$driver}";
+                $result[] = ['status' => false, 'message' => "Unsupported database driver: {$driver}"];;
             }
         }
-        return $result;
+
+        return array_merge($result,  $resultPrevius);
     }
 
     public function restore()
@@ -91,19 +95,33 @@ class BackupDatabase
         return false;
     }
 
-    function deleteAfter($day_for_delete, $filename)
+    private function checkPreviousBackups($destinationpath, $dbname, $day_for_delete)
     {
 
-        $day_for_delete = $day_for_delete ?? 0;
-
-        if (file_exists($filename)) {
-            if (Carbon::parse(filemtime($filename))->subDays($day_for_delete)->isPast()) {
-                // dd(filemtime($filename), time() - ($day_for_delete * 86400));
-                unlink($filename);
-            }
-            return true;
+        if ($day_for_delete === null) {
+            return [];
         }
-        return false;
+        $result = null;
+        foreach (glob($destinationpath . $dbname . "*.bak") as $file) {
+            $result[] = $this->deleteAfter($day_for_delete, $file);
+        }
+
+        return array_filter(is_array($result) ? $result : []);
+    }
+
+    function deleteAfter($day_for_delete, $filename)
+    {
+        if (!file_exists($filename)) {
+            return ['status' => false, 'message' => "File {$filename} not found."];
+        }
+        $date_file = Carbon::parse(filemtime($filename));
+        $date_now_sub_for_delate = Carbon::now()->subDays($day_for_delete);
+
+        if ($date_now_sub_for_delate > $date_file) {
+
+            unlink($filename);
+            return ['status' => true, 'message' => "File {$filename} deleted."];
+        }
     }
 
 
