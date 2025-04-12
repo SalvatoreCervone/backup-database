@@ -17,6 +17,8 @@ Example of single:
             'daily' => false,
             'datetimeFormat' => 'Y-m-d H:i',
             'destinationpath' => 'c:\tmp\\',
+            'days_for_delete' => 1,
+            'soft_delete' => false
         ]
     ],
 ```
@@ -35,9 +37,39 @@ example:
             'daily' => false,
             'datetimeFormat' => 'Y-m-d H:i',
             'destinationpath' => 'c:\tmp\\',
+            'days_for_delete' => 1,
+            'soft_delete' => false
         ]
     ],
 ```
+## Delete
+
+You can set, in config file, days_for_delete parameter.
+In this Parameter you set the days for delete previus databases.
+If you set days_for_delete = null delete is disabled.
+If you set days_for_delete = 0 you delete all previus databases.
+
+Another parameters in config file is: soft_delete
+if you set this parameter to true you previus databases not would deleted but moved in folder called trash 
+created in destinationpath
+
+exemple:
+```
+//  config/backup-database.php
+[
+    'connection' => env('DB_CONNECTION'),
+    'db_name' => 'db_name',
+    'db_host' => 'db_host',
+    'db_username' => 'user',
+    'db_password' => 'password123',
+    'daily' => false,
+    'datetimeFormat' => 'Y-m-d H:i',
+    'destinationpath' => 'c:\tmp\\',
+    'days_for_delete' => 1,
+    'soft_delete' => false
+]
+```
+in this case trash folder would created in c:\tmp -> c:\tmp\trash
 
 ## For install:
 
@@ -63,7 +95,7 @@ BackupDatabase::backup();
 
 This return result in terminal and create backup in config.destinationpath
 
-## VIEW
+## View
 
 In the blade view 
 ```
