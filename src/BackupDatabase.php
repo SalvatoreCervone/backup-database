@@ -24,13 +24,13 @@ class BackupDatabase
                 $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
                 $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
                 $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
-                $day_for_delete = $connection['day_for_delete'] ?? null;
+                $days_for_delete = $connection['days_for_delete'] ?? null;
                 $soft_delete = $connection['soft_delete'] ?? false;
                 $daily = $connection['daily'];
                 $destinationpath = $connection['destinationpath'];
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
 
-                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $day_for_delete, $soft_delete);
+                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
                 $resultCreateFolder = $this->createFolder($destinationpath);
                 if ($resultCreateFolder['status'] == false) {
                     $result[] = $resultCreateFolder['error'];
@@ -91,26 +91,26 @@ class BackupDatabase
         return false;
     }
 
-    private function checkPreviousBackups($destinationpath, $dbname, $day_for_delete, $soft_delete)
+    private function checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete)
     {
-        if ($day_for_delete === null) {
+        if ($days_for_delete === null) {
             return [];
         }
         $result = null;
         foreach (glob($destinationpath . $dbname . "*.bak") as $file) {
-            $result[] = $this->deleteAfter($day_for_delete, $file, $soft_delete);
+            $result[] = $this->deleteAfter($days_for_delete, $file, $soft_delete);
         }
 
         return array_filter(is_array($result) ? $result : []);
     }
 
-    function deleteAfter($day_for_delete, $filename, $soft_delete)
+    function deleteAfter($days_for_delete, $filename, $soft_delete)
     {
         if (!file_exists($filename)) {
             return ['status' => false, 'message' => "File {$filename} not found."];
         }
         $date_file = Carbon::parse(filemtime($filename));
-        $date_now_sub_for_delate = Carbon::now()->subDays($day_for_delete);
+        $date_now_sub_for_delate = Carbon::now()->subDays($days_for_delete);
 
         if ($date_now_sub_for_delate > $date_file) {
             if ($soft_delete) {

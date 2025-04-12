@@ -17,7 +17,7 @@ return [
              *  set null for not delete any previus database
              *  set 0 for delete all previus backup with start with the same dbname
              */
-            'day_for_delete' => 1, //
+            'days_for_delete' => 1, //
 
             /**
              * if true, the backup will move to the trash folder in same directory
