@@ -14,12 +14,8 @@ class BackupDatabase
 
     public function backup()
     {
-        // "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,      MEDIANAME = 'SQLServerBackups',      NAME = 'Full Backup of SQLTestDB';"
-
-
         $result = null;
         $listconnections = config('backup-database.listconnections');
-
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
@@ -35,7 +31,6 @@ class BackupDatabase
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
 
                 $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $day_for_delete, $soft_delete);
-
                 $resultCreateFolder = $this->createFolder($destinationpath);
                 if ($resultCreateFolder['status'] == false) {
                     $result[] = $resultCreateFolder['error'];
