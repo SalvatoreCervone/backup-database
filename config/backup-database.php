@@ -12,7 +12,18 @@ return [
             'daily' => false,
             'datetimeFormat' => 'Y-m-d H-i',
             'destinationpath' => 'c:\tmp\\',
-            'day_for_delete' => 1, // set 0 for delete all previus backup with start with the same dbname
+
+            /**
+             *  set null for not delete any previus database
+             *  set 0 for delete all previus backup with start with the same dbname
+             */
+            'day_for_delete' => 1, //
+
+            /**
+             * if true, the backup will move to the trash folder in same directory
+             * if false, the backup will be deleted
+             */
+            'soft_delete' => false,
         ]
     ],
     // 'base' => "BACKUP DATABASE SQLTestDB TO DISK = 'c:\tmp\SQLTestDB.bak'   WITH FORMAT,    NAME = 'Full Backup of SQLTestDB';"
