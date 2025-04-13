@@ -1,6 +1,6 @@
 # LARAVEL BACKUP-DATABASE
 
-![alt text](https://github.com/SalvatoreCervone/backup-database/blob/main/images/backup-database.jpeg)
+![laravel backup database](https://github.com/SalvatoreCervone/backup-database/blob/main/images/backup-database.jpeg | width=50%)
 
 ## BETA FOR BACKUP DATABASE
 
