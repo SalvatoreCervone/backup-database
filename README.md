@@ -1,6 +1,6 @@
 # LARAVEL BACKUP-DATABASE
 
-![alt text](https://github.com/SalvatoreCervone/backup-database/images/backup-database.jpg?raw=true)
+![alt text](https://github.com/SalvatoreCervone/backup-database/blob/main/images/backup-database.jpeg)
 
 ## BETA FOR BACKUP DATABASE
 
