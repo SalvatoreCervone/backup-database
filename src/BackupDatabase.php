@@ -26,6 +26,7 @@ class BackupDatabase
             }
 
             $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
+            $dbport = $connection['db_port'] ?? config("database.connections.{$connectionDatabase}.port");
             $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
             $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
             $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
@@ -47,7 +48,7 @@ class BackupDatabase
                 $result[] = ['status' => true, 'message' => $resultShell];
             } elseif ($driver == 'mysql') {
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".sql";
-                $script = "mysqldump --user={$username} --password={$password} --host={$dbhost} {$dbname} > {$destinationpath}{$name}";
+                $script = "mysqldump --user={$username} --password={$password} --host={$dbhost} --port={$dbport} {$dbname} > {$destinationpath}{$name}";
                 $resultShell = shell_exec($script);
                 $result[] = ['status' => true, 'message' => $resultShell];
             } else {
