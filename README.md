@@ -74,13 +74,11 @@ exemple:
 in this case trash folder would created in c:\tmp -> c:\tmp\trash
 
 ## For install:
-
 ```
 composer require salvatorecervone/backup-database
 ```
 
 ## For publish config 
-
 ```
 php artisan vendor:publish --tag="backup-database-config"
 ```
@@ -108,6 +106,25 @@ http://127.0.0.1:8000/backups
 In this view you have information of backup and :
 one button for delete a single backup
 one button for lunch all backups
+
+## Artisan command
+
+You find a command artisan for lunch backup for CLI or insert in schedulate
+```
+php artisan backup-database:backup
+```
+
+## Schedule
+
+If you schedule this, for example, every day you can use default laravel schedulate
+```
+App\Console\Kernel.php
+
+ protected function schedule(Schedule $schedule)    {
+    $schedule->command('backup-database:backup')->dailyAt('3:00')
+}
+
+```
 
 
 
