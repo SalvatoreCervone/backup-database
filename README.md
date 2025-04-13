@@ -6,6 +6,10 @@
 > [!IMPORTANT]
 > Actually V1 used for only backup MSSQL Database with Driver Sqlsrv
 
+- [x] MSSQL
+- [ ] MySQL
+- [ ] MongoDB
+
 ## 1 or more Database
 
 You can backup one or more database in single operation.
