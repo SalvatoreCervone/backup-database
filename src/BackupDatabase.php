@@ -3,7 +3,7 @@
 namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
-use PSpell\Config;
+use Illuminate\Support\Str;
 
 class BackupDatabase
 {
@@ -30,7 +30,7 @@ class BackupDatabase
                 $destinationpath = $connection['destinationpath'];
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
 
-                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
+
                 $resultCreateFolder = $this->createFolder($destinationpath);
                 if ($resultCreateFolder['status'] == false) {
                     $result[] = $resultCreateFolder['error'];
@@ -38,6 +38,11 @@ class BackupDatabase
                 }
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
                 $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                if (Str::startsWith($resultShell, 'Messaggio')) {
+                    $result[] = ['status' => false, 'message' => "Error: {$resultShell}"];
+                    continue;
+                }
+                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
                 $result[] = ['status' => true, 'message' => $resultShell];
             } else {
 
