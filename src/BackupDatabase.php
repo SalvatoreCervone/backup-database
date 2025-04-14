@@ -57,9 +57,18 @@ class BackupDatabase
     {
         $listBackups = null;
         $listconnections = config('backup-database.listconnections');
-        foreach ($listconnections as $connection) {
+        $urldascandire = collect($listconnections)->map(function ($item) {
+            return collect($item)->only(['destinationpath', 'connection'])->toArray();
+        })->unique();
+
+        $listGlobalFile = null;
+        foreach ($urldascandire as $connection) {
+
+
             $connectionDatabase = $connection['connection'];
+
             $listBackups[$connectionDatabase] = null;
+
             $driver = config("database.connections.{$connectionDatabase}.driver");
             if ($driver == 'sqlsrv') {
                 $destinationpath = $connection['destinationpath'];
@@ -72,8 +81,11 @@ class BackupDatabase
                     ];
                 }
             }
+            $listGlobalFile[$connectionDatabase] = array_merge($listGlobalFile[$connectionDatabase] ?? [], $listBackups[$connectionDatabase]);
         }
-        return $listBackups;
+
+
+        return $listGlobalFile;
     }
     public function delete()
     {
