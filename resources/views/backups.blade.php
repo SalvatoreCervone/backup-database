@@ -56,6 +56,7 @@
                 } else {
                     alert("Error creating backup: " + response.data.message);
                 }
+                console.log(response);
             })
             .catch(function(error) {
                 console.error(error);
