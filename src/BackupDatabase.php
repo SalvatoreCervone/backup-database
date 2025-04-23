@@ -38,7 +38,7 @@ class BackupDatabase
             $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
             $resultCreateFolder = $this->createFolder($destinationpath);
             if ($resultCreateFolder['status'] == false) {
-                $result[] = $resultCreateFolder['error'];
+                $result[] = $resultCreateFolder;
                 continue;
             }
             if ($driver == 'sqlsrv') {
@@ -158,7 +158,7 @@ class BackupDatabase
                 $resultCreateFolder = $this->createFolder($trash);
 
                 if ($resultCreateFolder['status'] == false) {
-                    return ['status' => false, 'message' => "Folder {$trash}  not writable."];
+                    return $resultCreateFolder;
                 }
                 $filenameTrash = $trash . basename($filename);
                 rename($filename, $filenameTrash);
@@ -177,7 +177,7 @@ class BackupDatabase
             mkdir($destinationpath, 0777, true);
         }
         if (!is_writable($destinationpath)) {
-            return ['status' => false, 'error' => "Destination path is not writable: {$destinationpath}"];
+            return ['status' => false, 'message' => "Destination path is not writable: {$destinationpath}"];
         }
         return ['status' => true];
     }
