@@ -7,6 +7,9 @@ use Illuminate\Support\Str;
 
 class BackupDatabase
 {
+
+    public  $supportedDrivers = ['sqlsrv', 'mysql'];
+
     public function __construct()
     {
         // Constructor code here
@@ -41,6 +44,7 @@ class BackupDatabase
                 $result[] = $resultCreateFolder;
                 continue;
             }
+
             if ($driver == 'sqlsrv') {
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
@@ -56,13 +60,10 @@ class BackupDatabase
                 $script = "mysqldump --user={$username} --password={$password} --host={$dbhost} --port={$dbport} {$dbname} > {$destinationpath}{$name}";
                 $resultShell = shell_exec($script);
                 $result[] = ['status' => true, 'message' => $resultShell];
-            } else {
-
-                $result[] = ['status' => false, 'message' => "Unsupported database driver: {$driver}"];;
             }
         }
 
-        return array_merge($result,  $resultPrevius);
+        return response()->json(array_merge($result,  $resultPrevius), 200);
     }
 
     public function restore()
@@ -113,8 +114,8 @@ class BackupDatabase
 
     private function checkDriver($driver)
     {
-        $supportedDrivers = ['sqlsrv', 'mysql'];
-        if (!in_array($driver, $supportedDrivers)) {
+
+        if (!in_array($driver, $this->supportedDrivers)) {
             return ['status' => false, 'message' => "Unsupported database driver: {$driver}"];
         }
         return ['status' => true];
