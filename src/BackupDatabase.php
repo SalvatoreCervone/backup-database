@@ -19,23 +19,30 @@ class BackupDatabase
         foreach ($listconnections as $connection) {
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
+            $resultCheckDriver = $this->checkDriver($driver);
+            if (!$resultCheckDriver['status']) {
+                $result[] = $resultCheckDriver;
+                continue;
+            }
+
+            $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
+            $dbport = $connection['db_port'] ?? config("database.connections.{$connectionDatabase}.port");
+            $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
+            $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
+            $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
+            $days_for_delete = $connection['days_for_delete'] ?? null;
+            $soft_delete = $connection['soft_delete'] ?? false;
+            $daily = $connection['daily'];
+            $destinationpath = $connection['destinationpath'];
+
+            $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
+            $resultCreateFolder = $this->createFolder($destinationpath);
+            if ($resultCreateFolder['status'] == false) {
+                $result[] = $resultCreateFolder['error'];
+                continue;
+            }
             if ($driver == 'sqlsrv') {
-                $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
-                $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
-                $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
-                $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
-                $days_for_delete = $connection['days_for_delete'] ?? null;
-                $soft_delete = $connection['soft_delete'] ?? false;
-                $daily = $connection['daily'];
-                $destinationpath = $connection['destinationpath'];
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
-
-
-                $resultCreateFolder = $this->createFolder($destinationpath);
-                if ($resultCreateFolder['status'] == false) {
-                    $result[] = $resultCreateFolder['error'];
-                    continue;
-                }
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
                 $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
                 if (Str::startsWith($resultShell, 'Messaggio')) {
@@ -43,6 +50,11 @@ class BackupDatabase
                     continue;
                 }
                 $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
+                $result[] = ['status' => true, 'message' => $resultShell];
+            } elseif ($driver == 'mysql') {
+                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".sql";
+                $script = "mysqldump --user={$username} --password={$password} --host={$dbhost} --port={$dbport} {$dbname} > {$destinationpath}{$name}";
+                $resultShell = shell_exec($script);
                 $result[] = ['status' => true, 'message' => $resultShell];
             } else {
 
@@ -97,6 +109,15 @@ class BackupDatabase
         $file = request()->input('file');
 
         return $this->deleteFile($file);
+    }
+
+    private function checkDriver($driver)
+    {
+        $supportedDrivers = ['sqlsrv', 'mysql'];
+        if (!in_array($driver, $supportedDrivers)) {
+            return ['status' => false, 'message' => "Unsupported database driver: {$driver}"];
+        }
+        return ['status' => true];
     }
 
     private function deleteFile($file)

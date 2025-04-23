@@ -7,7 +7,7 @@
 > Actually V1 used for only backup MSSQL Database with Driver Sqlsrv
 
 - [x] MSSQL
-- [ ] MySQL
+- [x] MySQL
 - [ ] MongoDB
 
 ## 1 or more Database
