@@ -86,7 +86,7 @@ class BackupDatabase
                     ];
                 }
             }
-            $listGlobalFile[$connectionDatabase] = array_merge($listGlobalFile[$connectionDatabase] ?? [], $listBackups[$connectionDatabase]);
+            $listGlobalFile[$connectionDatabase] = array_merge($listGlobalFile[$connectionDatabase] ?? [], $listBackups[$connectionDatabase] ?? []);
         }
 
 
