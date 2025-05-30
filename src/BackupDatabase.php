@@ -47,7 +47,7 @@ class BackupDatabase
 
             if ($driver == 'sqlsrv') {
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
-                $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "'";
+                $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "' WITH INIT";
                 $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
                 if (Str::startsWith($resultShell, 'Messaggio')) {
                     $result[] = ['status' => false, 'message' => "Error: {$resultShell}"];
