@@ -21,9 +21,9 @@ class BackupDatabase
         $result = null;
         $listconnections = config('backup-database.listconnections');
         foreach ($listconnections as $connection) {
-            Log::info("BackupDatabase: Starting backup for connection: {$connectionDatabase} with driver: {$driver}");
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
+            Log::info("BackupDatabase: Starting backup for connection: {$connectionDatabase} with driver: {$driver}");
             $resultCheckDriver = $this->checkDriver($driver);
             if (!$resultCheckDriver['status']) {
                 $result[] = $resultCheckDriver;
