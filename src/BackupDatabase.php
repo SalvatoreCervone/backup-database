@@ -37,7 +37,7 @@ class BackupDatabase
             Log::info("BackupDatabase: Using connection details - Host: {$dbhost}, Port: {$dbport}, Database: {$dbname}, Username: {$username}");
             $daily = $connection['daily'];
             $destinationpath = $connection['destinationpath'];
-
+            $resultPrevius = [];
             //$resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
             $resultCreateFolder = $this->createFolder($destinationpath);
             if ($resultCreateFolder['status'] == false) {
