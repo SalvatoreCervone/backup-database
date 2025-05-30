@@ -4,6 +4,7 @@ namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class BackupDatabase
 {
@@ -20,6 +21,7 @@ class BackupDatabase
         $result = null;
         $listconnections = config('backup-database.listconnections');
         foreach ($listconnections as $connection) {
+            Log::info("BackupDatabase: Starting backup for connection: {$connectionDatabase} with driver: {$driver}");
             $connectionDatabase = $connection['connection'];
             $driver = config("database.connections.{$connectionDatabase}.driver");
             $resultCheckDriver = $this->checkDriver($driver);
@@ -27,28 +29,30 @@ class BackupDatabase
                 $result[] = $resultCheckDriver;
                 continue;
             }
-
             $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
             $dbport = $connection['db_port'] ?? config("database.connections.{$connectionDatabase}.port");
             $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
             $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
             $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
-            $days_for_delete = $connection['days_for_delete'] ?? null;
-            $soft_delete = $connection['soft_delete'] ?? false;
+            Log::info("BackupDatabase: Using connection details - Host: {$dbhost}, Port: {$dbport}, Database: {$dbname}, Username: {$username}");
             $daily = $connection['daily'];
             $destinationpath = $connection['destinationpath'];
 
-            $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
+            //$resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
             $resultCreateFolder = $this->createFolder($destinationpath);
             if ($resultCreateFolder['status'] == false) {
                 $result[] = $resultCreateFolder;
                 continue;
             }
 
+            $days_for_delete = $connection['days_for_delete'] ?? null;
+            $soft_delete = $connection['soft_delete'] ?? false;
             if ($driver == 'sqlsrv') {
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "' WITH INIT";
+                Log::info("BackupDatabase: Executed SQL command: {$script}");
                 $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                Log::info("BackupDatabase: Shell command result: {$resultShell}");
                 if (Str::startsWith($resultShell, 'Messaggio')) {
                     $result[] = ['status' => false, 'message' => "Error: {$resultShell}"];
                     continue;
