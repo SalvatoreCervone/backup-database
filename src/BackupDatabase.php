@@ -41,6 +41,8 @@ class BackupDatabase
             //$resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
             $resultCreateFolder = $this->createFolder($destinationpath);
             if ($resultCreateFolder['status'] == false) {
+                Log::info("Error create folder: {$resultCreateFolder['message']}");
+                Log::info("{$destinationpath}");
                 $result[] = $resultCreateFolder;
                 continue;
             }
@@ -179,7 +181,7 @@ class BackupDatabase
     private function createFolder($destinationpath)
     {
         if (!is_dir($destinationpath)) {
-            mkdir($destinationpath, 0777, true);
+                mkdir($destinationpath, 0777, true);
         }
         if (!is_writable($destinationpath)) {
             return ['status' => false, 'message' => "Destination path is not writable: {$destinationpath}"];
