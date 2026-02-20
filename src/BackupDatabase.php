@@ -5,6 +5,12 @@ namespace SalvatoreCervone\BackupDatabase;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Icewind\SMB\ServerFactory;
+use Icewind\SMB\BasicAuth;
+use Icewind\SMB\System;
+use Icewind\SMB\Wrapped\Server as WrappedServer;
+use Icewind\SMB\Options;
+use Icewind\SMB\TimeZoneProvider;
 
 class BackupDatabase
 {
@@ -50,10 +56,13 @@ class BackupDatabase
             $days_for_delete = $connection['days_for_delete'] ?? null;
             $soft_delete = $connection['soft_delete'] ?? false;
             if ($driver == 'sqlsrv') {
+                $destinationpath = str_replace('\\', '\\\\', $destinationpath);
                 $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
                 $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "' WITH INIT";
                 Log::info("BackupDatabase: Executed SQL command: {$script}");
-                $resultShell = shell_exec('sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -Q "' . $script . '"');
+                $script_completo='sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -C -Q "' . $script . '"';
+                Log::info("BackupDatabase: Complete Command:  {$script_completo}");
+                $resultShell = shell_exec('/opt/mssql-tools18/bin/sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -C -Q "' . $script . '"');
                 Log::info("BackupDatabase: Shell command result: {$resultShell}");
                 if (Str::startsWith($resultShell, 'Messaggio')) {
                     $result[] = ['status' => false, 'message' => "Error: {$resultShell}"];
@@ -85,29 +94,61 @@ class BackupDatabase
             return collect($item)->only(['destinationpath', 'connection'])->toArray();
         })->unique();
 
-        $listGlobalFile = null;
         foreach ($urldascandire as $connection) {
-
-
             $connectionDatabase = $connection['connection'];
+            $destinationpath = $connection['destinationpath'];
 
-            $listBackups[$connectionDatabase] = null;
+            // 1. Parsing del percorso
+            $path = str_replace(['smb:', '\\\\','\\'], ['', '/','/'], $destinationpath);
 
-            $driver = config("database.connections.{$connectionDatabase}.driver");
-            if ($driver == 'sqlsrv') {
-                $destinationpath = $connection['destinationpath'];
-                foreach (glob($destinationpath . "*.bak") as $file) {
-                    $listBackups[$connectionDatabase][] = [
-                        'name' => basename($file),
-                        'size' => filesize($file),
-                        'modified' => date("F d Y H:i:s.", filemtime($file)),
-                        'destination' => $destinationpath,
-                    ];
+            $path = ltrim($path, '/');
+            $parts = explode('/', $path);
+
+            $host = array_shift($parts);
+            $shareName = array_shift($parts);
+            $remainingPath = implode('/', $parts) ?: '';
+
+            // 2. Credenziali
+            $user = config('backup-database.smb_user');
+            $pass = config('backup-database.smb_password');
+
+            // 3. Esecuzione comando (quello che abbiamo testato con successo)
+            // Usiamo l'opzione -D per entrare nella sottocartella se esiste
+            $cdCommand = $remainingPath ? "cd \"$remainingPath\"; " : "";
+            $cmd = "smbclient //{$host}/{$shareName} -U \"{$user}%{$pass}\" -c '{$cdCommand}ls' 2>&1";
+
+            $output = shell_exec($cmd);
+
+            $listBackups = [];
+            if ($output) {
+                // 4. Parsing dell'output di smbclient
+                // Una riga tipica è: "  nomefile.bak           A    12345  Thu Feb 19 12:00:00 2026"
+                $lines = explode("\n", $output);
+
+                foreach ($lines as $line) {
+                    $line = trim($line);
+
+                    // Filtriamo solo i file .bak (case insensitive)
+                    if (preg_match('/^(.*?\.bak)\s+[A-Z]*\s+(\d+)\s+(.*)$/i', $line, $matches)) {
+                        $fileName = trim($matches[1]);
+                        $size = $matches[2];
+                        $dateStr = $matches[3];
+
+                        $listBackups[] = [
+                            'name'        => $fileName,
+                            'size'        => (int)$size,
+                            'modified'    => $dateStr, // Già formattata da Samba
+                            'destination' => $destinationpath,
+                        ];
+                    }
                 }
             }
-            $listGlobalFile[$connectionDatabase] = array_merge($listGlobalFile[$connectionDatabase] ?? [], $listBackups[$connectionDatabase] ?? []);
-        }
 
+            $listGlobalFile[$connectionDatabase] = array_merge(
+                $listGlobalFile[$connectionDatabase] ?? [],
+                $listBackups
+            );
+        }
 
         return $listGlobalFile;
     }
