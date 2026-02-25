@@ -5,12 +5,7 @@ namespace SalvatoreCervone\BackupDatabase;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
-use Icewind\SMB\ServerFactory;
-use Icewind\SMB\BasicAuth;
-use Icewind\SMB\System;
-use Icewind\SMB\Wrapped\Server as WrappedServer;
-use Icewind\SMB\Options;
-use Icewind\SMB\TimeZoneProvider;
+use Illuminate\Support\Facades\Process;
 
 class BackupDatabase
 {
@@ -168,16 +163,134 @@ class BackupDatabase
         return ['status' => true];
     }
 
-    private function deleteFile($file)
-    {
-        if (file_exists($file)) {
-            unlink($file);
+    // private function deleteFile($file)
+    // {
+    //     if (file_exists($file)) {
+    //         unlink($file);
+    //         return true;
+    //     }
+    //     return false;
+    // }
+
+    public function deleteFile(string $fullPath)
+{
+    try {
+        // 1. Normalizzazione e splitting del percorso
+        $normalized = str_replace(['\\', '//'], '/', $fullPath);
+        $clean = ltrim($normalized, '/');
+
+        $serverIp  = Str::before($clean, '/');
+        $afterIp   = Str::after($clean, '/');
+        $shareName = Str::before($afterIp, '/');
+        $filePath  = Str::after($afterIp, '/');
+
+        // 2. Recupero credenziali dai config
+        $user = config('backup-database.smb_user');
+        $pass = config('backup-database.smb_password');
+
+        // Prepariamo il percorso per Windows (Samba preferisce i backslash nel comando del)
+        $winPath = str_replace('/', '\\', $filePath);
+
+        // 3. Esecuzione del comando smbclient
+        $result = Process::run([
+            'smbclient',
+            "//{$serverIp}/{$shareName}",
+            '-U', "{$user}%{$pass}",
+            '-c', "del \"{$winPath}\""
+        ]);
+
+        // 4. Gestione esito e logging
+        if ($result->successful()) {
+            Log::info("SMB: File eliminato correttamente: {$fullPath}");
             return true;
         }
+
+        // Se fallisce, scriviamo l'errore nel log ma non blocchiamo l'esecuzione
+        Log::warning("SMB: Fallimento eliminazione file.", [
+            'path'   => $fullPath,
+            'stdout' => $result->output(),
+            'stderr' => $result->errorOutput(),
+            'exit_code' => $result->exitCode()
+        ]);
+
+        return false;
+
+    } catch (\Exception $e) {
+        // Gestione eccezioni impreviste (es. smbclient non installato o errori di rete)
+        Log::error("SMB: Eccezione durante l'operazione deleteFile.", [
+            'message' => $e->getMessage(),
+            'path'    => $fullPath
+        ]);
+
         return false;
     }
+}
 
-    private function checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete)
+private function checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete)
+{
+    if ($days_for_delete === null) {
+        return [];
+    }
+
+    $result = [];
+
+    // 1. Normalizzazione e splitting (come nella deleteFile)
+    $normalized = str_replace(['\\', '//'], '/', $destinationpath);
+    $clean = ltrim($normalized, '/');
+    $serverIp = Str::before($clean, '/');
+    $afterIp = Str::after($clean, '/');
+    $shareName = Str::before($afterIp, '/');
+    $folderPath = Str::after($afterIp, '/'); // La sottocartella dove cercare
+
+    // 2. Eseguiamo 'ls' tramite smbclient per vedere i file remoti
+    $user = config('backup-database.smb_user');
+    $pass = config('backup-database.smb_password');
+
+    // Il comando 'ls' accetta wildcard
+    $searchMask = $folderPath . '/' . $dbname . "*.bak";
+    $searchMask = str_replace('/', '\\', $searchMask);
+
+    $process = Process::run([
+        'smbclient',
+        "//{$serverIp}/{$shareName}",
+        '-U', "{$user}%{$pass}",
+        '-c', "ls \"{$searchMask}\""
+    ]);
+
+    if ($process->failed()) {
+        Log::error("SMB ls failed: " . $process->errorOutput());
+        return [];
+    }
+
+    // 3. Analizziamo l'output di smbclient
+    // L'output tipico è: "  nomefile.bak                  A      1234  Fri Feb 21 04:00:00 2026"
+    $lines = explode("\n", $process->output());
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        // Saltiamo le righe vuote o quelle che indicano lo spazio libero
+        if (empty($line) || str_contains($line, 'blocks available')) continue;
+
+        // Estraiamo il nome del file (di solito è la prima parte della riga)
+        // Usiamo una regex semplice per prendere il nome del file prima degli attributi
+        if (preg_match('/^\s*(.*?)\s+[ADHR]/', $line, $matches)) {
+            $fileName = trim($matches[1]);
+
+            // Ricostruiamo il percorso completo per la cancellazione
+            $fullRemotePath = "//{$serverIp}/{$shareName}/" . ($folderPath ? $folderPath . "/" : "") . $fileName;
+
+            // Chiamiamo la logica di cancellazione basata sulla data
+            // Nota: deleteAfter deve essere in grado di gestire il file remoto o devi passarle la data estratta dal ls
+
+                $result[] =  $this->deleteAfter($days_for_delete, $fullRemotePath, $soft_delete);
+
+        }
+    }
+
+    return array_filter($result);
+}
+
+    private function checkPreviousBackups_old($destinationpath, $dbname, $days_for_delete, $soft_delete)
     {
         if ($days_for_delete === null) {
             return [];
@@ -190,33 +303,50 @@ class BackupDatabase
         return array_filter(is_array($result) ? $result : []);
     }
 
-    function deleteAfter($days_for_delete, $filename, $soft_delete)
-    {
-        if (!file_exists($filename)) {
-            return ['status' => false, 'message' => "File {$filename} not found."];
-        }
-        $date_file = Carbon::parse(filemtime($filename));
-        $date_now_sub_for_delate = Carbon::now()->subDays($days_for_delete);
+    private function deleteAfter($days, $fullPath, $soft_delete)
+{
+    // 1. Estraiamo la data dal nome del file (es: ...2026-02-21_04-00.bak)
+    // Cerchiamo il pattern YYYY-MM-DD
+    if (preg_match('/(\d{4}-\d{2}-\d{2})/', $fullPath, $matches)) {
+        $fileDate = \Carbon\Carbon::parse($matches[1]);
+        $expirationDate = now()->subDays($days);
 
-        if ($date_now_sub_for_delate > $date_file) {
-            if ($soft_delete) {
-                $fileinfo = pathinfo($filename);
-
-                $trash = $fileinfo['dirname']  . '\\trash\\';
-                $resultCreateFolder = $this->createFolder($trash);
-
-                if ($resultCreateFolder['status'] == false) {
-                    return $resultCreateFolder;
-                }
-                $filenameTrash = $trash . basename($filename);
-                rename($filename, $filenameTrash);
-            } else {
-                unlink($filename);
-            }
-
-            return ['status' => true, 'message' => "File {$filename} deleted."];
+        if ($fileDate->lessThan($expirationDate)) {
+            // Se scaduto, chiamiamo la nostra deleteFile
+            return $this->deleteFile($fullPath);
         }
     }
+
+    return null;
+}
+
+    // function deleteAfter($days_for_delete, $filename, $soft_delete)
+    // {
+    //     if (!file_exists($filename)) {
+    //         return ['status' => false, 'message' => "File {$filename} not found."];
+    //     }
+    //     $date_file = Carbon::parse(filemtime($filename));
+    //     $date_now_sub_for_delate = Carbon::now()->subDays($days_for_delete);
+
+    //     if ($date_now_sub_for_delate > $date_file) {
+    //         if ($soft_delete) {
+    //             $fileinfo = pathinfo($filename);
+
+    //             $trash = $fileinfo['dirname']  . '\\trash\\';
+    //             $resultCreateFolder = $this->createFolder($trash);
+
+    //             if ($resultCreateFolder['status'] == false) {
+    //                 return $resultCreateFolder;
+    //             }
+    //             $filenameTrash = $trash . basename($filename);
+    //             rename($filename, $filenameTrash);
+    //         } else {
+    //             unlink($filename);
+    //         }
+
+    //         return ['status' => true, 'message' => "File {$filename} deleted."];
+    //     }
+    // }
 
 
     private function createFolder($destinationpath)
