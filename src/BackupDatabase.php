@@ -303,20 +303,66 @@ private function checkPreviousBackups($destinationpath, $dbname, $days_for_delet
         return array_filter(is_array($result) ? $result : []);
     }
 
-    private function deleteAfter($days, $fullPath, $soft_delete)
+private function deleteAfter($days, $fullPath, $soft_delete)
 {
-    // 1. Estraiamo la data dal nome del file (es: ...2026-02-21_04-00.bak)
-    // Cerchiamo il pattern YYYY-MM-DD
     if (preg_match('/(\d{4}-\d{2}-\d{2})/', $fullPath, $matches)) {
         $fileDate = \Carbon\Carbon::parse($matches[1]);
         $expirationDate = now()->subDays($days);
 
         if ($fileDate->lessThan($expirationDate)) {
-            // Se scaduto, chiamiamo la nostra deleteFile
-            return $this->deleteFile($fullPath);
+
+            $normalized = str_replace(['\\', '//'], '/', $fullPath);
+            $clean = ltrim($normalized, '/');
+
+            $serverIp  = Str::before($clean, '/');
+            $rest      = Str::after($clean, '/');
+            $shareName = Str::before($rest, '/');
+            $filePath  = Str::after($rest, '/');
+
+            $user = config('backup-database.smb_user');
+            $pass = config('backup-database.smb_password');
+
+            if ($soft_delete) {
+                $fileName = basename($filePath);
+                // Aggiungiamo un timestamp per evitare collisioni di nomi nel trash
+                $trashName = date('Ymd_His') . '_' . $fileName;
+                $trashPath = "trash/" . $trashName;
+
+                /**
+                 * Usiamo il prefisso "-" davanti a mkdir.
+                 * In molti client questo ignora l'errore se la cartella esiste.
+                 * Se smbclient non lo supporta, concateniamo i comandi con ";"
+                 * così rename viene eseguito anche se mkdir fallisce.
+                 */
+                $smbCommand = "mkdir trash; rename \"{$filePath}\" \"{$trashPath}\"";
+                $actionLog = "Soft Delete (Spostato in trash)";
+            } else {
+                $smbCommand = "del \"{$filePath}\"";
+                $actionLog = "Hard Delete (Eliminato)";
+            }
+
+            // Esecuzione
+            $result = \Illuminate\Support\Facades\Process::run([
+                'smbclient',
+                "//{$serverIp}/{$shareName}",
+                '-U', "{$user}%{$pass}",
+                '-c', str_replace('/', '\\', $smbCommand)
+            ]);
+
+            /**
+             * IMPORTANTE: Se abbiamo fatto un soft_delete, l'exit code potrebbe essere 1
+             * perché 'mkdir trash' fallisce se la cartella esiste.
+             * Dobbiamo controllare se il file originale è sparito o se il rename ha avuto successo.
+             */
+            if ($result->successful() || ($soft_delete && str_contains($result->errorOutput(), 'NT_STATUS_OBJECT_NAME_COLLISION'))) {
+                \Illuminate\Support\Facades\Log::info("{$actionLog}: {$fullPath}");
+                return true;
+            }
+
+            \Illuminate\Support\Facades\Log::warning("Fallimento SMB su {$fullPath}: " . $result->errorOutput());
+            return false;
         }
     }
-
     return null;
 }
 
