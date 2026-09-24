@@ -3,406 +3,289 @@
 namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\File;
+use SalvatoreCervone\BackupDatabase\Mail\BackupFailedMail;
+use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
+use SalvatoreCervone\BackupDatabase\Drivers\Filesystem\FilesystemFactory;
+use SalvatoreCervone\BackupDatabase\Security\PathValidator;
 
 class BackupDatabase
 {
-
-    public  $supportedDrivers = ['sqlsrv', 'mysql'];
+    public array $supportedDrivers = ['sqlsrv', 'mysql'];
 
     public function __construct()
     {
-        // Constructor code here
     }
 
-    public function backup()
+    /**
+     * Run backup for all configured connections.
+     *
+     * @return array List of result arrays with 'status', 'message', and optional 'file' keys
+     */
+    public function backup(): array
     {
-        $result = null;
-        $listconnections = config('backup-database.listconnections');
-        foreach ($listconnections as $connection) {
-            $connectionDatabase = $connection['connection'];
-            $driver = config("database.connections.{$connectionDatabase}.driver");
-            Log::info("BackupDatabase: Starting backup for connection: {$connectionDatabase} with driver: {$driver}");
-            $resultCheckDriver = $this->checkDriver($driver);
-            if (!$resultCheckDriver['status']) {
-                $result[] = $resultCheckDriver;
-                continue;
-            }
-            $dbhost = $connection['db_host'] ?? config("database.connections.{$connectionDatabase}.host");
-            $dbport = $connection['db_port'] ?? config("database.connections.{$connectionDatabase}.port");
-            $dbname = $connection['db_name'] ?? config("database.connections.{$connectionDatabase}.database");
-            $username = $connection['db_username'] ?? config("database.connections.{$connectionDatabase}.username");
-            $password = $connection['db_password'] ?? config("database.connections.{$connectionDatabase}.password");
-            Log::info("BackupDatabase: Using connection details - Host: {$dbhost}, Port: {$dbport}, Database: {$dbname}, Username: {$username}");
-            $daily = $connection['daily'];
-            $destinationpath = $connection['destinationpath'];
-            $resultPrevius = [];
-            //$resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
-            $resultCreateFolder = $this->createFolder($destinationpath);
-            if ($resultCreateFolder['status'] == false) {
-                Log::info("Error create folder: {$resultCreateFolder['message']}");
-                Log::info("{$destinationpath}");
-                $result[] = $resultCreateFolder;
-                continue;
-            }
+        $results = [];
+        $listconnections = config('backup-database.listconnections', []);
 
-            $days_for_delete = $connection['days_for_delete'] ?? null;
-            $soft_delete = $connection['soft_delete'] ?? false;
-            if ($driver == 'sqlsrv') {
-                $destinationpath = str_replace('\\', '\\\\', $destinationpath);
-                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".bak";
-                $script = "BACKUP DATABASE " . $dbname . " TO DISK= '" . $destinationpath . $name . "' WITH INIT";
-                Log::info("BackupDatabase: Executed SQL command: {$script}");
-                $script_completo='sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -C -Q "' . $script . '"';
-                Log::info("BackupDatabase: Complete Command:  {$script_completo}");
-                $resultShell = shell_exec('/opt/mssql-tools18/bin/sqlcmd -S ' . $dbhost . ' -U ' .  $username . ' -P ' . $password . ' -C -Q "' . $script . '"');
-                Log::info("BackupDatabase: Shell command result: {$resultShell}");
-                if (Str::startsWith($resultShell, 'Messaggio')) {
-                    $result[] = ['status' => false, 'message' => "Error: {$resultShell}"];
-                    continue;
+        foreach ($listconnections as $connection) {
+            $connectionName = $connection['connection'] ?? 'Unknown';
+            try {
+                $driverName = config("database.connections.{$connectionName}.driver");
+                
+                Log::info("BackupDatabase: Avvio backup per {$connectionName} ({$driverName})");
+
+                $driver = DriverManager::make($driverName);
+                
+                $dbConfig = [
+                    'db_host' => $connection['db_host'] ?? config("database.connections.{$connectionName}.host"),
+                    'db_port' => $connection['db_port'] ?? config("database.connections.{$connectionName}.port"),
+                    'db_name' => $connection['db_name'] ?? config("database.connections.{$connectionName}.database"),
+                    'db_username' => $connection['db_username'] ?? config("database.connections.{$connectionName}.username"),
+                    'db_password' => $connection['db_password'] ?? config("database.connections.{$connectionName}.password"),
+                    'destinationpath' => $this->normalizePath($connection['destinationpath']),
+                    'daily' => $connection['daily'] ?? false,
+                    'datetimeFormat' => $connection['datetimeFormat'] ?? 'Y-m-d_H-i',
+                ];
+
+                $this->ensureDirectoryExists($dbConfig['destinationpath']);
+
+                $backupResult = $driver->backup($dbConfig);
+                $results[] = $backupResult;
+
+                if ($backupResult['status']) {
+                    $this->logOperation("BACKUP SUCCESS", "Connessione: {$connectionName} - File: {$backupResult['file']}");
+                    $cleanupResults = $this->cleanupOldBackups($connection, $dbConfig);
+                    $results = array_merge($results, $cleanupResults);
+                } else {
+                    $this->logOperation("BACKUP FAILED", "Connessione: {$connectionName} - Errore: " . ($backupResult['message'] ?? 'Unknown error'));
                 }
-                $resultPrevius = $this->checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete);
-                $result[] = ['status' => true, 'message' => $resultShell];
-            } elseif ($driver == 'mysql') {
-                $name = $dbname  .  ($daily ? "_" . Carbon::now()->format($connection['datetimeFormat']) : "") . ".sql";
-                $script = "mysqldump --user={$username} --password={$password} --host={$dbhost} --port={$dbport} {$dbname} > {$destinationpath}{$name}";
-                $resultShell = shell_exec($script);
-                $result[] = ['status' => true, 'message' => $resultShell];
+
+            } catch (\Exception $e) {
+                Log::error("BackupDatabase Error [{$connectionName}]: " . $e->getMessage());
+                $this->logOperation("BACKUP ERROR", "Connessione: {$connectionName} - Exception: " . $e->getMessage());
+                
+                $this->notifyFailure($connectionName, $e->getMessage());
+
+                $results[] = ['status' => false, 'message' => "{$connectionName}: " . $e->getMessage()];
             }
         }
 
-        return response()->json(array_merge($result,  $resultPrevius), 200);
+        return $results;
     }
 
-    public function restore()
+    /**
+     * Restore a database from a backup file.
+     *
+     * @param string $connectionName The connection name from config
+     * @param string $fileName The backup file name (basename only, validated server-side)
+     * @return array Result with 'status' and 'message' keys
+     */
+    public function restore(string $connectionName, string $fileName): array
     {
-        // Restore logic here
-    }
+        try {
+            // Validate and resolve the full file path securely
+            $fullPath = PathValidator::validateFileName($fileName, $connectionName);
 
-    public function getStatus()
-    {
-        $listBackups = null;
-        $listconnections = config('backup-database.listconnections');
-        $urldascandire = collect($listconnections)->map(function ($item) {
-            return collect($item)->only(['destinationpath', 'connection'])->toArray();
-        })->unique();
+            $listconnections = config('backup-database.listconnections', []);
+            $connection = collect($listconnections)->firstWhere('connection', $connectionName);
 
-        foreach ($urldascandire as $connection) {
-            $connectionDatabase = $connection['connection'];
-            $destinationpath = $connection['destinationpath'];
-
-            // 1. Parsing del percorso
-            $path = str_replace(['smb:', '\\\\','\\'], ['', '/','/'], $destinationpath);
-
-            $path = ltrim($path, '/');
-            $parts = explode('/', $path);
-
-            $host = array_shift($parts);
-            $shareName = array_shift($parts);
-            $remainingPath = implode('/', $parts) ?: '';
-
-            // 2. Credenziali
-            $user = config('backup-database.smb_user');
-            $pass = config('backup-database.smb_password');
-
-            // 3. Esecuzione comando (quello che abbiamo testato con successo)
-            // Usiamo l'opzione -D per entrare nella sottocartella se esiste
-            $cdCommand = $remainingPath ? "cd \"$remainingPath\"; " : "";
-            $cmd = "smbclient //{$host}/{$shareName} -U \"{$user}%{$pass}\" -c '{$cdCommand}ls' 2>&1";
-
-            $output = shell_exec($cmd);
-
-            $listBackups = [];
-            if ($output) {
-                // 4. Parsing dell'output di smbclient
-                // Una riga tipica è: "  nomefile.bak           A    12345  Thu Feb 19 12:00:00 2026"
-                $lines = explode("\n", $output);
-
-                foreach ($lines as $line) {
-                    $line = trim($line);
-
-                    // Filtriamo solo i file .bak (case insensitive)
-                    if (preg_match('/^(.*?\.bak)\s+[A-Z]*\s+(\d+)\s+(.*)$/i', $line, $matches)) {
-                        $fileName = trim($matches[1]);
-                        $size = $matches[2];
-                        $dateStr = $matches[3];
-
-                        $listBackups[] = [
-                            'name'        => $fileName,
-                            'size'        => (int)$size,
-                            'modified'    => $dateStr, // Già formattata da Samba
-                            'destination' => $destinationpath,
-                        ];
-                    }
-                }
+            if (!$connection) {
+                throw new BackupException("Configurazione connessione {$connectionName} non trovata.");
             }
 
-            $listGlobalFile[$connectionDatabase] = array_merge(
-                $listGlobalFile[$connectionDatabase] ?? [],
-                $listBackups
-            );
+            $driverName = config("database.connections.{$connectionName}.driver");
+            $driver = DriverManager::make($driverName);
+
+            $dbConfig = [
+                'db_host' => $connection['db_host'] ?? config("database.connections.{$connectionName}.host"),
+                'db_port' => $connection['db_port'] ?? config("database.connections.{$connectionName}.port"),
+                'db_name' => $connection['db_name'] ?? config("database.connections.{$connectionName}.database"),
+                'db_username' => $connection['db_username'] ?? config("database.connections.{$connectionName}.username"),
+                'db_password' => $connection['db_password'] ?? config("database.connections.{$connectionName}.password"),
+            ];
+
+            $result = $driver->restore($dbConfig, $fullPath);
+
+            $this->logOperation("RESTORE SUCCESS", "Connessione: {$connectionName} - File: {$fileName}");
+
+            return [
+                'status' => true,
+                'message' => $result['message']
+            ];
+
+        } catch (\Exception $e) {
+            Log::error("Restore Error [{$connectionName}]: " . $e->getMessage());
+            $this->logOperation("RESTORE FAILED", "Connessione: {$connectionName} - File: {$fileName} - Errore: " . $e->getMessage());
+            return [
+                'status' => false,
+                'message' => "Ripristino fallito: " . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Get the daily activity logs.
+     */
+    public function getLogs(): string
+    {
+        $logPath = storage_path('logs/backup-database-' . date('Y-m-d') . '.log');
+        if (File::exists($logPath)) {
+            return File::get($logPath);
+        }
+        return "Nessun log disponibile per oggi.";
+    }
+
+    /**
+     * Get the status of all backups across configured connections.
+     *
+     * @return array Associative array keyed by connection name, containing backup file lists
+     */
+    public function getStatus(): array
+    {
+        $listGlobalFile = [];
+        $listconnections = config('backup-database.listconnections', []);
+
+        $uniquePaths = collect($listconnections)->map(function ($item) {
+            return [
+                'path' => $this->normalizePath($item['destinationpath']),
+                'connection' => $item['connection']
+            ];
+        })->unique('path');
+
+        foreach ($uniquePaths as $pathInfo) {
+            try {
+                $fs = FilesystemFactory::make($pathInfo['path']);
+                $backups = $fs->listFiles($pathInfo['path'], '*.bak');
+                $backups = array_merge($backups, $fs->listFiles($pathInfo['path'], '*.sql'));
+                $listGlobalFile[$pathInfo['connection']] = $backups;
+            } catch (\Exception $e) {
+                Log::warning("Impossibile leggere file in {$pathInfo['path']}: " . $e->getMessage());
+                $listGlobalFile[$pathInfo['connection']] = [];
+            }
         }
 
         return $listGlobalFile;
     }
-    public function delete()
+
+    /**
+     * Delete a backup file.
+     *
+     * @param string $connectionName The connection name (used to resolve the allowed directory)
+     * @param string $fileName The backup file name (basename only)
+     * @return array Result with 'status' and 'message' keys
+     */
+    public function delete(string $connectionName, string $fileName): array
     {
-        $file = request()->input('file');
+        try {
+            // Validate and resolve the full file path securely
+            $fullPath = PathValidator::validateFileName($fileName, $connectionName);
 
-        return $this->deleteFile($file);
+            $fs = FilesystemFactory::make($fullPath);
+            $status = $fs->deleteFile($fullPath);
+            $this->logOperation("DELETE " . ($status ? "SUCCESS" : "FAILED"), "File: {$fileName}");
+            return [
+                'status' => $status,
+                'message' => $status ? "File eliminato correttamente." : "Errore durante l'eliminazione."
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => false,
+                'message' => "Errore: " . $e->getMessage()
+            ];
+        }
     }
 
-    private function checkDriver($driver)
+    /**
+     * Cleanup old backups based on retention policy (days_for_delete).
+     */
+    protected function cleanupOldBackups(array $connection, array $dbConfig): array
     {
+        $days = $connection['days_for_delete'] ?? null;
+        if ($days === null) return [];
 
-        if (!in_array($driver, $this->supportedDrivers)) {
-            return ['status' => false, 'message' => "Unsupported database driver: {$driver}"];
-        }
-        return ['status' => true];
-    }
+        $softDelete = $connection['soft_delete'] ?? false;
+        $dbname = $dbConfig['db_name'];
+        $path = $dbConfig['destinationpath'];
 
-    // private function deleteFile($file)
-    // {
-    //     if (file_exists($file)) {
-    //         unlink($file);
-    //         return true;
-    //     }
-    //     return false;
-    // }
+        $fs = FilesystemFactory::make($path);
+        $files = $fs->listFiles($path, $dbname . "*");
+        $results = [];
 
-    public function deleteFile(string $fullPath)
-{
-    try {
-        // 1. Normalizzazione e splitting del percorso
-        $normalized = str_replace(['\\', '//'], '/', $fullPath);
-        $clean = ltrim($normalized, '/');
-
-        $serverIp  = Str::before($clean, '/');
-        $afterIp   = Str::after($clean, '/');
-        $shareName = Str::before($afterIp, '/');
-        $filePath  = Str::after($afterIp, '/');
-
-        // 2. Recupero credenziali dai config
-        $user = config('backup-database.smb_user');
-        $pass = config('backup-database.smb_password');
-
-        // Prepariamo il percorso per Windows (Samba preferisce i backslash nel comando del)
-        $winPath = str_replace('/', '\\', $filePath);
-
-        // 3. Esecuzione del comando smbclient
-        $result = Process::run([
-            'smbclient',
-            "//{$serverIp}/{$shareName}",
-            '-U', "{$user}%{$pass}",
-            '-c', "del \"{$winPath}\""
-        ]);
-
-        // 4. Gestione esito e logging
-        if ($result->successful()) {
-            Log::info("SMB: File eliminato correttamente: {$fullPath}");
-            return true;
-        }
-
-        // Se fallisce, scriviamo l'errore nel log ma non blocchiamo l'esecuzione
-        Log::warning("SMB: Fallimento eliminazione file.", [
-            'path'   => $fullPath,
-            'stdout' => $result->output(),
-            'stderr' => $result->errorOutput(),
-            'exit_code' => $result->exitCode()
-        ]);
-
-        return false;
-
-    } catch (\Exception $e) {
-        // Gestione eccezioni impreviste (es. smbclient non installato o errori di rete)
-        Log::error("SMB: Eccezione durante l'operazione deleteFile.", [
-            'message' => $e->getMessage(),
-            'path'    => $fullPath
-        ]);
-
-        return false;
-    }
-}
-
-private function checkPreviousBackups($destinationpath, $dbname, $days_for_delete, $soft_delete)
-{
-    if ($days_for_delete === null) {
-        return [];
-    }
-
-    $result = [];
-
-    // 1. Normalizzazione e splitting (come nella deleteFile)
-    $normalized = str_replace(['\\', '//'], '/', $destinationpath);
-    $clean = ltrim($normalized, '/');
-    $serverIp = Str::before($clean, '/');
-    $afterIp = Str::after($clean, '/');
-    $shareName = Str::before($afterIp, '/');
-    $folderPath = Str::after($afterIp, '/'); // La sottocartella dove cercare
-
-    // 2. Eseguiamo 'ls' tramite smbclient per vedere i file remoti
-    $user = config('backup-database.smb_user');
-    $pass = config('backup-database.smb_password');
-
-    // Il comando 'ls' accetta wildcard
-    $searchMask = $folderPath . '/' . $dbname . "*.bak";
-    $searchMask = str_replace('/', '\\', $searchMask);
-
-    $process = Process::run([
-        'smbclient',
-        "//{$serverIp}/{$shareName}",
-        '-U', "{$user}%{$pass}",
-        '-c', "ls \"{$searchMask}\""
-    ]);
-
-    if ($process->failed()) {
-        Log::error("SMB ls failed: " . $process->errorOutput());
-        return [];
-    }
-
-    // 3. Analizziamo l'output di smbclient
-    // L'output tipico è: "  nomefile.bak                  A      1234  Fri Feb 21 04:00:00 2026"
-    $lines = explode("\n", $process->output());
-
-    foreach ($lines as $line) {
-        $line = trim($line);
-        // Saltiamo le righe vuote o quelle che indicano lo spazio libero
-        if (empty($line) || str_contains($line, 'blocks available')) continue;
-
-        // Estraiamo il nome del file (di solito è la prima parte della riga)
-        // Usiamo una regex semplice per prendere il nome del file prima degli attributi
-        if (preg_match('/^\s*(.*?)\s+[ADHR]/', $line, $matches)) {
-            $fileName = trim($matches[1]);
-
-            // Ricostruiamo il percorso completo per la cancellazione
-            $fullRemotePath = "//{$serverIp}/{$shareName}/" . ($folderPath ? $folderPath . "/" : "") . $fileName;
-
-            // Chiamiamo la logica di cancellazione basata sulla data
-            // Nota: deleteAfter deve essere in grado di gestire il file remoto o devi passarle la data estratta dal ls
-
-                $result[] =  $this->deleteAfter($days_for_delete, $fullRemotePath, $soft_delete);
-
-        }
-    }
-
-    return array_filter($result);
-}
-
-    private function checkPreviousBackups_old($destinationpath, $dbname, $days_for_delete, $soft_delete)
-    {
-        if ($days_for_delete === null) {
-            return [];
-        }
-        $result = null;
-        foreach (glob($destinationpath . $dbname . "*.bak") as $file) {
-            $result[] = $this->deleteAfter($days_for_delete, $file, $soft_delete);
-        }
-
-        return array_filter(is_array($result) ? $result : []);
-    }
-
-private function deleteAfter($days, $fullPath, $soft_delete)
-{
-    if (preg_match('/(\d{4}-\d{2}-\d{2})/', $fullPath, $matches)) {
-        $fileDate = \Carbon\Carbon::parse($matches[1]);
-        $expirationDate = now()->subDays($days);
-
-        if ($fileDate->lessThan($expirationDate)) {
-
-            $normalized = str_replace(['\\', '//'], '/', $fullPath);
-            $clean = ltrim($normalized, '/');
-
-            $serverIp  = Str::before($clean, '/');
-            $rest      = Str::after($clean, '/');
-            $shareName = Str::before($rest, '/');
-            $filePath  = Str::after($rest, '/');
-
-            $user = config('backup-database.smb_user');
-            $pass = config('backup-database.smb_password');
-
-            if ($soft_delete) {
-                $fileName = basename($filePath);
-                // Aggiungiamo un timestamp per evitare collisioni di nomi nel trash
-                $trashName = date('Ymd_His') . '_' . $fileName;
-                $trashPath = "trash/" . $trashName;
-
-                /**
-                 * Usiamo il prefisso "-" davanti a mkdir.
-                 * In molti client questo ignora l'errore se la cartella esiste.
-                 * Se smbclient non lo supporta, concateniamo i comandi con ";"
-                 * così rename viene eseguito anche se mkdir fallisce.
-                 */
-                $smbCommand = "mkdir trash; rename \"{$filePath}\" \"{$trashPath}\"";
-                $actionLog = "Soft Delete (Spostato in trash)";
-            } else {
-                $smbCommand = "del \"{$filePath}\"";
-                $actionLog = "Hard Delete (Eliminato)";
+        foreach ($files as $file) {
+            if (preg_match('/(\d{4}-\d{2}-\d{2})/', $file['name'], $matches)) {
+                $fileDate = Carbon::parse($matches[1]);
+                if ($fileDate->lessThan(now()->subDays($days))) {
+                    if ($softDelete) {
+                        $trashPath = $path . "trash" . DIRECTORY_SEPARATOR . date('Ymd_His') . '_' . $file['name'];
+                        $success = $fs->moveFile($file['full_path'], $trashPath);
+                        $results[] = ['status' => $success, 'message' => "Soft delete per {$file['name']}"];
+                    } else {
+                        $success = $fs->deleteFile($file['full_path']);
+                        $results[] = ['status' => $success, 'message' => "Hard delete per {$file['name']}"];
+                    }
+                }
             }
+        }
 
-            // Esecuzione
-            $result = \Illuminate\Support\Facades\Process::run([
-                'smbclient',
-                "//{$serverIp}/{$shareName}",
-                '-U', "{$user}%{$pass}",
-                '-c', str_replace('/', '\\', $smbCommand)
-            ]);
+        return $results;
+    }
 
-            /**
-             * IMPORTANTE: Se abbiamo fatto un soft_delete, l'exit code potrebbe essere 1
-             * perché 'mkdir trash' fallisce se la cartella esiste.
-             * Dobbiamo controllare se il file originale è sparito o se il rename ha avuto successo.
-             */
-            if ($result->successful() || ($soft_delete && str_contains($result->errorOutput(), 'NT_STATUS_OBJECT_NAME_COLLISION'))) {
-                \Illuminate\Support\Facades\Log::info("{$actionLog}: {$fullPath}");
-                return true;
+    /**
+     * Send email notification on backup failure.
+     */
+    protected function notifyFailure(string $connectionName, string $message): void
+    {
+        $recipient = config('backup-database.notification_email');
+        if ($recipient) {
+            try {
+                Mail::to($recipient)->send(new BackupFailedMail($connectionName, $message));
+            } catch (\Exception $e) {
+                Log::error("Impossibile inviare mail di notifica: " . $e->getMessage());
             }
-
-            \Illuminate\Support\Facades\Log::warning("Fallimento SMB su {$fullPath}: " . $result->errorOutput());
-            return false;
         }
     }
-    return null;
-}
 
-    // function deleteAfter($days_for_delete, $filename, $soft_delete)
-    // {
-    //     if (!file_exists($filename)) {
-    //         return ['status' => false, 'message' => "File {$filename} not found."];
-    //     }
-    //     $date_file = Carbon::parse(filemtime($filename));
-    //     $date_now_sub_for_delate = Carbon::now()->subDays($days_for_delete);
-
-    //     if ($date_now_sub_for_delate > $date_file) {
-    //         if ($soft_delete) {
-    //             $fileinfo = pathinfo($filename);
-
-    //             $trash = $fileinfo['dirname']  . '\\trash\\';
-    //             $resultCreateFolder = $this->createFolder($trash);
-
-    //             if ($resultCreateFolder['status'] == false) {
-    //                 return $resultCreateFolder;
-    //             }
-    //             $filenameTrash = $trash . basename($filename);
-    //             rename($filename, $filenameTrash);
-    //         } else {
-    //             unlink($filename);
-    //         }
-
-    //         return ['status' => true, 'message' => "File {$filename} deleted."];
-    //     }
-    // }
-
-
-    private function createFolder($destinationpath)
+    /**
+     * Normalize a path to use consistent directory separators.
+     */
+    protected function normalizePath(string $path): string
     {
-        if (!is_dir($destinationpath)) {
-                mkdir($destinationpath, 0777, true);
+        $path = str_replace(['/','\\'], DIRECTORY_SEPARATOR, $path);
+        return rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    /**
+     * Ensure a directory exists on the local filesystem.
+     * Does not create directories on SMB paths (handled by the SMB driver).
+     */
+    protected function ensureDirectoryExists(string $path): void
+    {
+        if (PHP_OS_FAMILY === 'Windows' || (!str_starts_with($path, '//') && !str_starts_with($path, 'smb:'))) {
+             if (!is_dir($path)) {
+                 mkdir($path, 0777, true);
+             }
         }
-        if (!is_writable($destinationpath)) {
-            return ['status' => false, 'message' => "Destination path is not writable: {$destinationpath}"];
+    }
+
+    /**
+     * Write an entry to the package's daily log file.
+     */
+    protected function logOperation(string $type, string $message): void
+    {
+        if (!config('backup-database.enable_logging', true)) {
+            return;
         }
-        return ['status' => true];
+
+        $logPath = storage_path('logs/backup-database-' . date('Y-m-d') . '.log');
+        $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[{$timestamp}] [{$type}] {$message}" . PHP_EOL;
+
+        try {
+            File::append($logPath, $logEntry);
+        } catch (\Exception $e) {
+            Log::error("Impossibile scrivere nel log del pacchetto: " . $e->getMessage());
+        }
     }
 }

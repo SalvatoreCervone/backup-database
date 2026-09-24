@@ -1,10 +1,10 @@
 <?php
 
-namespace Salvatore\BackupDatabase\Tests;
+namespace SalvatoreCervone\BackupDatabase\Tests;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use Salvatore\BackupDatabase\BackupDatabaseServiceProvider;
+use SalvatoreCervone\BackupDatabase\BackupDatabaseServiceProvider;
 
 class TestCase extends Orchestra
 {
@@ -13,7 +13,7 @@ class TestCase extends Orchestra
         parent::setUp();
 
         Factory::guessFactoryNamesUsing(
-            fn (string $modelName) => 'Salvatore\\BackupDatabase\\Database\\Factories\\'.class_basename($modelName).'Factory'
+            fn (string $modelName) => 'SalvatoreCervone\\BackupDatabase\\Database\\Factories\\'.class_basename($modelName).'Factory'
         );
     }
 
