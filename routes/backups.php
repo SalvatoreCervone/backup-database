@@ -5,7 +5,7 @@ use SalvatoreCervone\BackupDatabase\Http\Controllers\BackupController;
 use SalvatoreCervone\BackupDatabase\Http\Middleware\AuthorizeBackupAccess;
 
 $middleware = array_merge(
-    config('backup-database.middleware', ['web', 'auth']),
+    config('backup-database.middleware', ['web']),
     [AuthorizeBackupAccess::class]
 );
 
