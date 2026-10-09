@@ -3,21 +3,19 @@
 namespace SalvatoreCervone\BackupDatabase;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\File;
-use SalvatoreCervone\BackupDatabase\Mail\BackupFailedMail;
-use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
 use SalvatoreCervone\BackupDatabase\Drivers\Filesystem\FilesystemFactory;
+use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
+use SalvatoreCervone\BackupDatabase\Mail\BackupFailedMail;
 use SalvatoreCervone\BackupDatabase\Security\PathValidator;
 
 class BackupDatabase
 {
     public array $supportedDrivers = ['sqlsrv', 'mysql'];
 
-    public function __construct()
-    {
-    }
+    public function __construct() {}
 
     /**
      * Run backup for all configured connections.
@@ -33,11 +31,11 @@ class BackupDatabase
             $connectionName = $connection['connection'] ?? 'Unknown';
             try {
                 $driverName = config("database.connections.{$connectionName}.driver");
-                
+
                 Log::info("BackupDatabase: Avvio backup per {$connectionName} ({$driverName})");
 
                 $driver = DriverManager::make($driverName);
-                
+
                 $dbConfig = [
                     'db_host' => $connection['db_host'] ?? config("database.connections.{$connectionName}.host"),
                     'db_port' => $connection['db_port'] ?? config("database.connections.{$connectionName}.port"),
@@ -55,20 +53,20 @@ class BackupDatabase
                 $results[] = $backupResult;
 
                 if ($backupResult['status']) {
-                    $this->logOperation("BACKUP SUCCESS", "Connessione: {$connectionName} - File: {$backupResult['file']}");
+                    $this->logOperation('BACKUP SUCCESS', "Connessione: {$connectionName} - File: {$backupResult['file']}");
                     $cleanupResults = $this->cleanupOldBackups($connection, $dbConfig);
                     $results = array_merge($results, $cleanupResults);
                 } else {
-                    $this->logOperation("BACKUP FAILED", "Connessione: {$connectionName} - Errore: " . ($backupResult['message'] ?? 'Unknown error'));
+                    $this->logOperation('BACKUP FAILED', "Connessione: {$connectionName} - Errore: ".($backupResult['message'] ?? 'Unknown error'));
                 }
 
             } catch (\Exception $e) {
-                Log::error("BackupDatabase Error [{$connectionName}]: " . $e->getMessage());
-                $this->logOperation("BACKUP ERROR", "Connessione: {$connectionName} - Exception: " . $e->getMessage());
-                
+                Log::error("BackupDatabase Error [{$connectionName}]: ".$e->getMessage());
+                $this->logOperation('BACKUP ERROR', "Connessione: {$connectionName} - Exception: ".$e->getMessage());
+
                 $this->notifyFailure($connectionName, $e->getMessage());
 
-                $results[] = ['status' => false, 'message' => "{$connectionName}: " . $e->getMessage()];
+                $results[] = ['status' => false, 'message' => "{$connectionName}: ".$e->getMessage()];
             }
         }
 
@@ -78,8 +76,8 @@ class BackupDatabase
     /**
      * Restore a database from a backup file.
      *
-     * @param string $connectionName The connection name from config
-     * @param string $fileName The backup file name (basename only, validated server-side)
+     * @param  string  $connectionName  The connection name from config
+     * @param  string  $fileName  The backup file name (basename only, validated server-side)
      * @return array Result with 'status' and 'message' keys
      */
     public function restore(string $connectionName, string $fileName): array
@@ -91,7 +89,7 @@ class BackupDatabase
             $listconnections = config('backup-database.listconnections', []);
             $connection = collect($listconnections)->firstWhere('connection', $connectionName);
 
-            if (!$connection) {
+            if (! $connection) {
                 throw new BackupException("Configurazione connessione {$connectionName} non trovata.");
             }
 
@@ -108,19 +106,20 @@ class BackupDatabase
 
             $result = $driver->restore($dbConfig, $fullPath);
 
-            $this->logOperation("RESTORE SUCCESS", "Connessione: {$connectionName} - File: {$fileName}");
+            $this->logOperation('RESTORE SUCCESS', "Connessione: {$connectionName} - File: {$fileName}");
 
             return [
                 'status' => true,
-                'message' => $result['message']
+                'message' => $result['message'],
             ];
 
         } catch (\Exception $e) {
-            Log::error("Restore Error [{$connectionName}]: " . $e->getMessage());
-            $this->logOperation("RESTORE FAILED", "Connessione: {$connectionName} - File: {$fileName} - Errore: " . $e->getMessage());
+            Log::error("Restore Error [{$connectionName}]: ".$e->getMessage());
+            $this->logOperation('RESTORE FAILED', "Connessione: {$connectionName} - File: {$fileName} - Errore: ".$e->getMessage());
+
             return [
                 'status' => false,
-                'message' => "Ripristino fallito: " . $e->getMessage()
+                'message' => 'Ripristino fallito: '.$e->getMessage(),
             ];
         }
     }
@@ -130,11 +129,12 @@ class BackupDatabase
      */
     public function getLogs(): string
     {
-        $logPath = storage_path('logs/backup-database-' . date('Y-m-d') . '.log');
+        $logPath = storage_path('logs/backup-database-'.date('Y-m-d').'.log');
         if (File::exists($logPath)) {
             return File::get($logPath);
         }
-        return "Nessun log disponibile per oggi.";
+
+        return 'Nessun log disponibile per oggi.';
     }
 
     /**
@@ -150,7 +150,7 @@ class BackupDatabase
         $uniquePaths = collect($listconnections)->map(function ($item) {
             return [
                 'path' => $this->normalizePath($item['destinationpath']),
-                'connection' => $item['connection']
+                'connection' => $item['connection'],
             ];
         })->unique('path');
 
@@ -161,7 +161,7 @@ class BackupDatabase
                 $backups = array_merge($backups, $fs->listFiles($pathInfo['path'], '*.sql'));
                 $listGlobalFile[$pathInfo['connection']] = $backups;
             } catch (\Exception $e) {
-                Log::warning("Impossibile leggere file in {$pathInfo['path']}: " . $e->getMessage());
+                Log::warning("Impossibile leggere file in {$pathInfo['path']}: ".$e->getMessage());
                 $listGlobalFile[$pathInfo['connection']] = [];
             }
         }
@@ -172,8 +172,8 @@ class BackupDatabase
     /**
      * Delete a backup file.
      *
-     * @param string $connectionName The connection name (used to resolve the allowed directory)
-     * @param string $fileName The backup file name (basename only)
+     * @param  string  $connectionName  The connection name (used to resolve the allowed directory)
+     * @param  string  $fileName  The backup file name (basename only)
      * @return array Result with 'status' and 'message' keys
      */
     public function delete(string $connectionName, string $fileName): array
@@ -184,15 +184,16 @@ class BackupDatabase
 
             $fs = FilesystemFactory::make($fullPath);
             $status = $fs->deleteFile($fullPath);
-            $this->logOperation("DELETE " . ($status ? "SUCCESS" : "FAILED"), "File: {$fileName}");
+            $this->logOperation('DELETE '.($status ? 'SUCCESS' : 'FAILED'), "File: {$fileName}");
+
             return [
                 'status' => $status,
-                'message' => $status ? "File eliminato correttamente." : "Errore durante l'eliminazione."
+                'message' => $status ? 'File eliminato correttamente.' : "Errore durante l'eliminazione.",
             ];
         } catch (\Exception $e) {
             return [
                 'status' => false,
-                'message' => "Errore: " . $e->getMessage()
+                'message' => 'Errore: '.$e->getMessage(),
             ];
         }
     }
@@ -203,14 +204,16 @@ class BackupDatabase
     protected function cleanupOldBackups(array $connection, array $dbConfig): array
     {
         $days = $connection['days_for_delete'] ?? null;
-        if ($days === null) return [];
+        if ($days === null) {
+            return [];
+        }
 
         $softDelete = $connection['soft_delete'] ?? false;
         $dbname = $dbConfig['db_name'];
         $path = $dbConfig['destinationpath'];
 
         $fs = FilesystemFactory::make($path);
-        $files = $fs->listFiles($path, $dbname . "*");
+        $files = $fs->listFiles($path, $dbname.'*');
         $results = [];
 
         foreach ($files as $file) {
@@ -218,7 +221,7 @@ class BackupDatabase
                 $fileDate = Carbon::parse($matches[1]);
                 if ($fileDate->lessThan(now()->subDays($days))) {
                     if ($softDelete) {
-                        $trashPath = $path . "trash" . DIRECTORY_SEPARATOR . date('Ymd_His') . '_' . $file['name'];
+                        $trashPath = $path.'trash'.DIRECTORY_SEPARATOR.date('Ymd_His').'_'.$file['name'];
                         $success = $fs->moveFile($file['full_path'], $trashPath);
                         $results[] = ['status' => $success, 'message' => "Soft delete per {$file['name']}"];
                     } else {
@@ -242,7 +245,7 @@ class BackupDatabase
             try {
                 Mail::to($recipient)->send(new BackupFailedMail($connectionName, $message));
             } catch (\Exception $e) {
-                Log::error("Impossibile inviare mail di notifica: " . $e->getMessage());
+                Log::error('Impossibile inviare mail di notifica: '.$e->getMessage());
             }
         }
     }
@@ -252,8 +255,9 @@ class BackupDatabase
      */
     protected function normalizePath(string $path): string
     {
-        $path = str_replace(['/','\\'], DIRECTORY_SEPARATOR, $path);
-        return rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+
+        return rtrim($path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
     }
 
     /**
@@ -262,10 +266,10 @@ class BackupDatabase
      */
     protected function ensureDirectoryExists(string $path): void
     {
-        if (PHP_OS_FAMILY === 'Windows' || (!str_starts_with($path, '//') && !str_starts_with($path, 'smb:'))) {
-             if (!is_dir($path)) {
-                 mkdir($path, 0777, true);
-             }
+        if (PHP_OS_FAMILY === 'Windows' || (! str_starts_with($path, '//') && ! str_starts_with($path, 'smb:'))) {
+            if (! is_dir($path)) {
+                mkdir($path, 0777, true);
+            }
         }
     }
 
@@ -274,18 +278,18 @@ class BackupDatabase
      */
     protected function logOperation(string $type, string $message): void
     {
-        if (!config('backup-database.enable_logging', true)) {
+        if (! config('backup-database.enable_logging', true)) {
             return;
         }
 
-        $logPath = storage_path('logs/backup-database-' . date('Y-m-d') . '.log');
+        $logPath = storage_path('logs/backup-database-'.date('Y-m-d').'.log');
         $timestamp = date('Y-m-d H:i:s');
-        $logEntry = "[{$timestamp}] [{$type}] {$message}" . PHP_EOL;
+        $logEntry = "[{$timestamp}] [{$type}] {$message}".PHP_EOL;
 
         try {
             File::append($logPath, $logEntry);
         } catch (\Exception $e) {
-            Log::error("Impossibile scrivere nel log del pacchetto: " . $e->getMessage());
+            Log::error('Impossibile scrivere nel log del pacchetto: '.$e->getMessage());
         }
     }
 }

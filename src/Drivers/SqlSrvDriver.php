@@ -2,11 +2,10 @@
 
 namespace SalvatoreCervone\BackupDatabase\Drivers;
 
-use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
-use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
+use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
 use SalvatoreCervone\BackupDatabase\Exceptions\DriverException;
 
 class SqlSrvDriver implements BackupDriver
@@ -23,9 +22,9 @@ class SqlSrvDriver implements BackupDriver
         $binPath = config('backup-database.bin_paths.sqlcmd', '/opt/mssql-tools18/bin/sqlcmd');
         $compression = $config['compression'] ?? config('backup-database.mssql_compression', false);
 
-        $name = $dbname . ($daily ? "_" . Carbon::now()->format($datetimeFormat) : "") . ".bak";
-        $fullDestination = $destinationPath . $name;
-        
+        $name = $dbname.($daily ? '_'.Carbon::now()->format($datetimeFormat) : '').'.bak';
+        $fullDestination = $destinationPath.$name;
+
         // Convert to Windows-style path for SQL Server (it runs on the DB server, not the web server)
         $sqlPath = str_replace('/', '\\', $fullDestination);
 
@@ -48,18 +47,18 @@ class SqlSrvDriver implements BackupDriver
             '-U', $username,
             '-P', $password,
             '-C',
-            '-Q', $script
+            '-Q', $script,
         ]);
 
         if ($result->successful()) {
             return [
                 'status' => true,
                 'message' => $result->output(),
-                'file' => $name
+                'file' => $name,
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: "Errore durante il backup MSSQL.");
+        throw new DriverException($result->errorOutput() ?: 'Errore durante il backup MSSQL.');
     }
 
     public function restore(array $config, string $backupFilePath): array
@@ -75,10 +74,10 @@ class SqlSrvDriver implements BackupDriver
         // Sanitize: escape single quotes in the path
         $sqlPath = str_replace("'", "''", $sqlPath);
         $safeDbName = $this->sanitizeDbName($dbname);
-        
+
         // Comando per ripristinare sovrascrivendo (WITH REPLACE) e chiudendo le connessioni (ALTER DATABASE ... SET SINGLE_USER)
-        $script = "ALTER DATABASE [{$safeDbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " .
-                  "RESTORE DATABASE [{$safeDbName}] FROM DISK = N'{$sqlPath}' WITH REPLACE; " .
+        $script = "ALTER DATABASE [{$safeDbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; ".
+                  "RESTORE DATABASE [{$safeDbName}] FROM DISK = N'{$sqlPath}' WITH REPLACE; ".
                   "ALTER DATABASE [{$safeDbName}] SET MULTI_USER;";
 
         Log::info("SqlSrvDriver: Avvio ripristino per {$dbname} da {$backupFilePath}");
@@ -89,17 +88,17 @@ class SqlSrvDriver implements BackupDriver
             '-U', $username,
             '-P', $password,
             '-C',
-            '-Q', $script
+            '-Q', $script,
         ]);
 
         if ($result->successful()) {
             return [
                 'status' => true,
-                'message' => "Ripristino completato con successo: " . $result->output()
+                'message' => 'Ripristino completato con successo: '.$result->output(),
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: "Errore durante il ripristino MSSQL.");
+        throw new DriverException($result->errorOutput() ?: 'Errore durante il ripristino MSSQL.');
     }
 
     /**
@@ -108,8 +107,8 @@ class SqlSrvDriver implements BackupDriver
      * Uses RESTORE VERIFYONLY to check that the backup set is complete
      * and that all volumes are readable.
      *
-     * @param array $config Database connection configuration
-     * @param string $backupFilePath Full path to the backup file
+     * @param  array  $config  Database connection configuration
+     * @param  string  $backupFilePath  Full path to the backup file
      * @return array Result with 'status' and 'message' keys
      */
     public function verify(array $config, string $backupFilePath): array
@@ -132,19 +131,19 @@ class SqlSrvDriver implements BackupDriver
             '-U', $username,
             '-P', $password,
             '-C',
-            '-Q', $script
+            '-Q', $script,
         ]);
 
         if ($result->successful()) {
             return [
                 'status' => true,
-                'message' => "Verifica completata: il backup è valido."
+                'message' => 'Verifica completata: il backup è valido.',
             ];
         }
 
         return [
             'status' => false,
-            'message' => "Verifica fallita: " . ($result->errorOutput() ?: "Backup corrotto o non leggibile.")
+            'message' => 'Verifica fallita: '.($result->errorOutput() ?: 'Backup corrotto o non leggibile.'),
         ];
     }
 

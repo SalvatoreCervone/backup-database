@@ -23,15 +23,16 @@ class BackupDatabaseCommand extends Command
             if ($result['status'] ?? false) {
                 $message = $result['message'] ?? 'OK';
                 $file = $result['file'] ?? null;
-                $this->info("✅ {$message}" . ($file ? " [{$file}]" : ''));
+                $this->info("✅ {$message}".($file ? " [{$file}]" : ''));
             } else {
                 $hasErrors = true;
-                $this->error("❌ " . ($result['message'] ?? 'Unknown error'));
+                $this->error('❌ '.($result['message'] ?? 'Unknown error'));
             }
         }
 
         if ($hasErrors) {
             $this->warn('Backup completed with errors. Check the logs for details.');
+
             return self::FAILURE;
         }
 

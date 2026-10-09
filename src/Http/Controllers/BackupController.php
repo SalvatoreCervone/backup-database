@@ -3,12 +3,10 @@
 namespace SalvatoreCervone\BackupDatabase\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use SalvatoreCervone\BackupDatabase\BackupDatabase;
 use SalvatoreCervone\BackupDatabase\Http\Requests\DeleteBackupRequest;
 use SalvatoreCervone\BackupDatabase\Http\Requests\RestoreBackupRequest;
-use SalvatoreCervone\BackupDatabase\Security\PathValidator;
 
 class BackupController extends Controller
 {

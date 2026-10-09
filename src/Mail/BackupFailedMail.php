@@ -11,6 +11,7 @@ class BackupFailedMail extends Mailable
     use Queueable, SerializesModels;
 
     public string $errorMessage;
+
     public string $connectionName;
 
     public function __construct(string $connectionName, string $errorMessage)
@@ -21,7 +22,7 @@ class BackupFailedMail extends Mailable
 
     public function build()
     {
-        return $this->subject('FALLIMENTO BACKUP: ' . $this->connectionName)
-                    ->html("<h1>Il backup per la connessione {$this->connectionName} è fallito</h1><p>Errore: {$this->errorMessage}</p>");
+        return $this->subject('FALLIMENTO BACKUP: '.$this->connectionName)
+            ->html("<h1>Il backup per la connessione {$this->connectionName} è fallito</h1><p>Errore: {$this->errorMessage}</p>");
     }
 }

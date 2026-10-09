@@ -2,6 +2,4 @@
 
 namespace SalvatoreCervone\BackupDatabase\Exceptions;
 
-class DriverException extends BackupException
-{
-}
+class DriverException extends BackupException {}
