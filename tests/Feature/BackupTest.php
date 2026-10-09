@@ -7,15 +7,15 @@ uses(TestCase::class);
 use Illuminate\Support\Facades\Process;
 use SalvatoreCervone\BackupDatabase\BackupDatabase;
 use SalvatoreCervone\BackupDatabase\DriverManager;
-use SalvatoreCervone\BackupDatabase\Drivers\SqlSrvDriver;
 use SalvatoreCervone\BackupDatabase\Drivers\MySqlDriver;
+use SalvatoreCervone\BackupDatabase\Drivers\SqlSrvDriver;
 
 // =============================================================================
 // SERVICE INSTANTIATION
 // =============================================================================
 
 it('can instantiate the service', function () {
-    $service = new BackupDatabase();
+    $service = new BackupDatabase;
     expect($service)->toBeInstanceOf(BackupDatabase::class);
 });
 
@@ -35,7 +35,7 @@ it('resolves the correct MySQL driver', function () {
 
 it('throws exception for unsupported driver', function () {
     DriverManager::make('unsupported_db');
-})->throws(\Exception::class, 'Unsupported database driver: unsupported_db');
+})->throws(Exception::class, 'Unsupported database driver: unsupported_db');
 
 // =============================================================================
 // BACKUP PROCESS
@@ -43,16 +43,16 @@ it('throws exception for unsupported driver', function () {
 
 it('executes the MySQL backup process', function () {
     Process::fake();
-    
+
     config(['backup-database.listconnections' => [
         [
             'connection' => 'mysql',
             'destinationpath' => '/tmp/',
             'db_name' => 'test_db',
             'daily' => false,
-        ]
+        ],
     ]]);
-    
+
     config(['database.connections.mysql' => [
         'driver' => 'mysql',
         'host' => 'localhost',
@@ -61,19 +61,20 @@ it('executes the MySQL backup process', function () {
         'password' => 'password',
     ]]);
 
-    $service = new BackupDatabase();
+    $service = new BackupDatabase;
     $results = $service->backup();
 
     expect($results)->toBeArray();
     Process::assertRan(function ($process) {
         $command = is_array($process->command) ? implode(' ', $process->command) : $process->command;
+
         return str_contains($command, 'mysqldump');
     });
 });
 
 it('executes the MSSQL backup process', function () {
     Process::fake();
-    
+
     config(['backup-database.listconnections' => [
         [
             'connection' => 'sqlsrv_test',
@@ -81,9 +82,9 @@ it('executes the MSSQL backup process', function () {
             'db_name' => 'TestDB',
             'daily' => true,
             'datetimeFormat' => 'Y-m-d',
-        ]
+        ],
     ]]);
-    
+
     config(['database.connections.sqlsrv_test' => [
         'driver' => 'sqlsrv',
         'host' => 'localhost',
@@ -92,12 +93,13 @@ it('executes the MSSQL backup process', function () {
         'password' => 'password123',
     ]]);
 
-    $service = new BackupDatabase();
+    $service = new BackupDatabase;
     $results = $service->backup();
 
     expect($results)->toBeArray();
     Process::assertRan(function ($process) {
         $command = is_array($process->command) ? implode(' ', $process->command) : $process->command;
+
         return str_contains($command, 'sqlcmd') && str_contains($command, 'BACKUP DATABASE');
     });
 });
@@ -110,16 +112,16 @@ it('handles backup failure gracefully', function () {
             exitCode: 1,
         ),
     ]);
-    
+
     config(['backup-database.listconnections' => [
         [
             'connection' => 'mysql',
             'destinationpath' => '/tmp/',
             'db_name' => 'test_db',
             'daily' => false,
-        ]
+        ],
     ]]);
-    
+
     config(['database.connections.mysql' => [
         'driver' => 'mysql',
         'host' => 'localhost',
@@ -128,7 +130,7 @@ it('handles backup failure gracefully', function () {
         'password' => 'password',
     ]]);
 
-    $service = new BackupDatabase();
+    $service = new BackupDatabase;
     $results = $service->backup();
 
     expect($results)->toBeArray()

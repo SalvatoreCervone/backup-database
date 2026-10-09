@@ -2,9 +2,9 @@
 
 namespace SalvatoreCervone\BackupDatabase;
 
+use SalvatoreCervone\BackupDatabase\Commands\BackupDatabaseCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use SalvatoreCervone\BackupDatabase\Commands\BackupDatabaseCommand;
 
 class BackupDatabaseServiceProvider extends PackageServiceProvider
 {
@@ -17,7 +17,6 @@ class BackupDatabaseServiceProvider extends PackageServiceProvider
             ->hasViews()
             ->hasRoute('backups')
             // ->hasMigration('create_backup_database_table')
-            ->hasCommand(BackupDatabaseCommand::class)
-        ;
+            ->hasCommand(BackupDatabaseCommand::class);
     }
 }

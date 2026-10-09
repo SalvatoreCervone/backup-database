@@ -2,11 +2,10 @@
 
 namespace SalvatoreCervone\BackupDatabase\Drivers;
 
-use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
-use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
+use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
 use SalvatoreCervone\BackupDatabase\Exceptions\DriverException;
 
 class MySqlDriver implements BackupDriver
@@ -23,8 +22,8 @@ class MySqlDriver implements BackupDriver
         $datetimeFormat = $config['datetimeFormat'] ?? 'Y-m-d_H-i';
         $binPath = config('backup-database.bin_paths.mysqldump', 'mysqldump');
 
-        $name = $dbname . ($daily ? "_" . Carbon::now()->format($datetimeFormat) : "") . ".sql";
-        $fullDestination = $destinationPath . $name;
+        $name = $dbname.($daily ? '_'.Carbon::now()->format($datetimeFormat) : '').'.sql';
+        $fullDestination = $destinationPath.$name;
 
         Log::info("MySqlDriver: Esecuzione backup per {$dbname}");
 
@@ -35,18 +34,18 @@ class MySqlDriver implements BackupDriver
             "--host={$dbhost}",
             "--port={$dbport}",
             "--result-file={$fullDestination}",
-            $dbname
+            $dbname,
         ]);
 
         if ($result->successful()) {
             return [
                 'status' => true,
-                'message' => "Backup completato con successo.",
-                'file' => $name
+                'message' => 'Backup completato con successo.',
+                'file' => $name,
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: "Errore durante il backup MySQL.");
+        throw new DriverException($result->errorOutput() ?: 'Errore durante il backup MySQL.');
     }
 
     public function restore(array $config, string $backupFilePath): array
@@ -79,10 +78,10 @@ class MySqlDriver implements BackupDriver
         if ($result->successful()) {
             return [
                 'status' => true,
-                'message' => "Ripristino MySQL completato."
+                'message' => 'Ripristino MySQL completato.',
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: "Errore durante il ripristino MySQL.");
+        throw new DriverException($result->errorOutput() ?: 'Errore durante il ripristino MySQL.');
     }
 }

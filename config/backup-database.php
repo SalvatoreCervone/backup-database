@@ -64,7 +64,7 @@ return [
              * if false, the backup will be deleted
              */
             'soft_delete' => false,
-        ]
+        ],
     ],
 
     /*

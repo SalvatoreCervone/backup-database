@@ -2,6 +2,4 @@
 
 namespace SalvatoreCervone\BackupDatabase\Exceptions;
 
-class SmbException extends BackupException
-{
-}
+class SmbException extends BackupException {}

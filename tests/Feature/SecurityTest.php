@@ -4,8 +4,8 @@ use SalvatoreCervone\BackupDatabase\Tests\TestCase;
 
 uses(TestCase::class);
 
-use SalvatoreCervone\BackupDatabase\Security\PathValidator;
 use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
+use SalvatoreCervone\BackupDatabase\Security\PathValidator;
 
 // =============================================================================
 // PATH TRAVERSAL PROTECTION
@@ -13,7 +13,7 @@ use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
 
 it('rejects filenames with directory separators', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     PathValidator::validateFileName('../../etc/passwd', 'mysql');
@@ -21,7 +21,7 @@ it('rejects filenames with directory separators', function () {
 
 it('rejects filenames with backslash directory separators', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     PathValidator::validateFileName('..\\..\\windows\\system32\\config', 'mysql');
@@ -29,7 +29,7 @@ it('rejects filenames with backslash directory separators', function () {
 
 it('rejects filenames containing double dots', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     PathValidator::validateFileName('..myfile.sql', 'mysql');
@@ -37,7 +37,7 @@ it('rejects filenames containing double dots', function () {
 
 it('rejects empty filenames', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     PathValidator::validateFileName('', 'mysql');
@@ -45,7 +45,7 @@ it('rejects empty filenames', function () {
 
 it('rejects unknown connection names', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     PathValidator::validateFileName('backup.sql', 'nonexistent_connection');
@@ -53,7 +53,7 @@ it('rejects unknown connection names', function () {
 
 it('accepts valid basename filenames', function () {
     config(['backup-database.listconnections' => [
-        ['connection' => 'mysql', 'destinationpath' => '/var/backups/']
+        ['connection' => 'mysql', 'destinationpath' => '/var/backups/'],
     ]]);
 
     $result = PathValidator::validateFileName('mydb_2026-09-24.sql', 'mysql');

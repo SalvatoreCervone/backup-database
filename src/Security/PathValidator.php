@@ -13,10 +13,11 @@ class PathValidator
      * This prevents path traversal attacks (e.g., ../../etc/passwd) by ensuring
      * the resolved path starts with an allowed base directory.
      *
-     * @param string $filePath The file path to validate (from user input)
-     * @param array|null $allowedBasePaths Optional explicit list of allowed base paths. 
-     *                                      If null, reads from config.
+     * @param  string  $filePath  The file path to validate (from user input)
+     * @param  array|null  $allowedBasePaths  Optional explicit list of allowed base paths.
+     *                                        If null, reads from config.
      * @return string The validated, normalized file path
+     *
      * @throws BackupException If the path is outside all allowed directories
      */
     public static function validate(string $filePath, ?array $allowedBasePaths = null): string
@@ -49,9 +50,10 @@ class PathValidator
      * Validate that only a basename (filename without directory separators) was provided,
      * and resolve it against a specific connection's destination path.
      *
-     * @param string $fileName The file name (should be a basename)
-     * @param string $connectionName The connection name to look up the destination path
+     * @param  string  $fileName  The file name (should be a basename)
+     * @param  string  $connectionName  The connection name to look up the destination path
      * @return string The full resolved file path
+     *
      * @throws BackupException If the filename contains directory traversal or connection not found
      */
     public static function validateFileName(string $fileName, string $connectionName): string
@@ -69,13 +71,13 @@ class PathValidator
         $connections = config('backup-database.listconnections', []);
         $connection = collect($connections)->firstWhere('connection', $connectionName);
 
-        if (!$connection) {
+        if (! $connection) {
             throw new BackupException("Configurazione connessione '{$connectionName}' non trovata.");
         }
 
         $basePath = self::normalizePath($connection['destinationpath']);
 
-        return $basePath . $fileName;
+        return $basePath.$fileName;
     }
 
     /**
@@ -87,7 +89,7 @@ class PathValidator
         $paths = [];
 
         foreach ($connections as $connection) {
-            if (!empty($connection['destinationpath'])) {
+            if (! empty($connection['destinationpath'])) {
                 $paths[] = self::normalizePath($connection['destinationpath']);
             }
         }
@@ -106,7 +108,7 @@ class PathValidator
 
         // If the directory can be resolved, use the real path
         if ($resolvedDir !== false) {
-            $resolvedPath = $resolvedDir . DIRECTORY_SEPARATOR . basename($path);
+            $resolvedPath = $resolvedDir.DIRECTORY_SEPARATOR.basename($path);
         } else {
             // Directory doesn't exist yet (could be valid for new backups)
             // Still check the normalized path for traversal patterns
@@ -114,7 +116,7 @@ class PathValidator
         }
 
         // Normalize for comparison
-        $normalizedResolved = self::normalizePath(dirname($resolvedPath)) ;
+        $normalizedResolved = self::normalizePath(dirname($resolvedPath));
 
         foreach ($allowedBasePaths as $basePath) {
             $normalizedBase = self::normalizePath($basePath);
@@ -142,10 +144,10 @@ class PathValidator
             );
         }
 
-        $normalizedPath = self::normalizePath(dirname($path) . '/');
+        $normalizedPath = self::normalizePath(dirname($path).'/');
 
         foreach ($allowedBasePaths as $basePath) {
-            if (!self::isSmbPath($basePath)) {
+            if (! self::isSmbPath($basePath)) {
                 continue;
             }
 
@@ -167,7 +169,8 @@ class PathValidator
     protected static function normalizePath(string $path): string
     {
         $path = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $path);
-        return rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        return rtrim($path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
     }
 
     /**
@@ -175,8 +178,8 @@ class PathValidator
      */
     protected static function isSmbPath(string $path): bool
     {
-        return str_starts_with($path, '//') 
-            || str_starts_with($path, '\\\\') 
+        return str_starts_with($path, '//')
+            || str_starts_with($path, '\\\\')
             || str_starts_with($path, 'smb:');
     }
 }
