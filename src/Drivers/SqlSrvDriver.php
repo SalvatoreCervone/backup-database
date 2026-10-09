@@ -39,7 +39,7 @@ class SqlSrvDriver implements BackupDriver
 
         $script = "BACKUP DATABASE [{$this->sanitizeDbName($dbname)}] TO DISK = N'{$sqlPath}' WITH {$withOptions}";
 
-        Log::info("SqlSrvDriver: Esecuzione backup per {$dbname}");
+        Log::info("SqlSrvDriver: Esecuzione backup per {$dbname} con script: {$script}");
 
         $result = Process::run([
             $binPath,
@@ -47,18 +47,30 @@ class SqlSrvDriver implements BackupDriver
             '-U', $username,
             '-P', $password,
             '-C',
+            '-b',
             '-Q', $script,
         ]);
 
-        if ($result->successful()) {
+        $output = trim($result->output());
+        $errorOutput = trim($result->errorOutput());
+        $fullOutput = trim($output.($errorOutput ? "\n".$errorOutput : ''));
+
+        Log::info("SqlSrvDriver output per {$dbname}: ".($fullOutput ?: '(nessun output)'));
+
+        $hasError = $result->failed()
+            || str_starts_with($output, 'Messaggio')
+            || str_contains($output, 'Msg ')
+            || str_contains($output, 'Error');
+
+        if (! $hasError && $result->successful()) {
             return [
                 'status' => true,
-                'message' => $result->output(),
+                'message' => $fullOutput ?: 'Backup completato con successo.',
                 'file' => $name,
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: 'Errore durante il backup MSSQL.');
+        throw new DriverException($fullOutput ?: 'Errore durante il backup MSSQL.');
     }
 
     public function restore(array $config, string $backupFilePath): array
@@ -80,7 +92,7 @@ class SqlSrvDriver implements BackupDriver
                   "RESTORE DATABASE [{$safeDbName}] FROM DISK = N'{$sqlPath}' WITH REPLACE; ".
                   "ALTER DATABASE [{$safeDbName}] SET MULTI_USER;";
 
-        Log::info("SqlSrvDriver: Avvio ripristino per {$dbname} da {$backupFilePath}");
+        Log::info("SqlSrvDriver: Avvio ripristino per {$dbname} da {$backupFilePath} con script: {$script}");
 
         $result = Process::run([
             $binPath,
@@ -88,17 +100,29 @@ class SqlSrvDriver implements BackupDriver
             '-U', $username,
             '-P', $password,
             '-C',
+            '-b',
             '-Q', $script,
         ]);
 
-        if ($result->successful()) {
+        $output = trim($result->output());
+        $errorOutput = trim($result->errorOutput());
+        $fullOutput = trim($output.($errorOutput ? "\n".$errorOutput : ''));
+
+        Log::info("SqlSrvDriver output ripristino per {$dbname}: ".($fullOutput ?: '(nessun output)'));
+
+        $hasError = $result->failed()
+            || str_starts_with($output, 'Messaggio')
+            || str_contains($output, 'Msg ')
+            || str_contains($output, 'Error');
+
+        if (! $hasError && $result->successful()) {
             return [
                 'status' => true,
-                'message' => 'Ripristino completato con successo: '.$result->output(),
+                'message' => 'Ripristino completato con successo: '.$fullOutput,
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: 'Errore durante il ripristino MSSQL.');
+        throw new DriverException($fullOutput ?: 'Errore durante il ripristino MSSQL.');
     }
 
     /**
