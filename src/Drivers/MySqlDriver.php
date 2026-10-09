@@ -45,7 +45,8 @@ class MySqlDriver implements BackupDriver
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: 'Errore durante il backup MySQL.');
+        $error = trim($result->errorOutput() ?: $result->output()) ?: 'Errore durante il backup MySQL.';
+        throw new DriverException($error);
     }
 
     public function restore(array $config, string $backupFilePath): array

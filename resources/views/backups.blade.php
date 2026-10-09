@@ -93,21 +93,36 @@
         axios.post("{{ route('backup.create') }}")
             .then(res => {
                 logContainer.innerHTML = '';
+                let hasFailure = false;
                 res.data.forEach(result => {
+                    if (!result.status) hasFailure = true;
                     const div = document.createElement('div');
                     div.className = 'card';
                     div.style.borderLeft = result.status ? '4px solid var(--success)' : '4px solid var(--danger)';
                     div.innerHTML = `
-                        <strong>${result.status ? '✅ Successo' : '❌ Fallito'}</strong>: ${result.message}
-                        ${result.file ? `<br><small>File: ${result.file}</small>` : ''}
+                        <div style="margin-bottom: 6px;">
+                            <strong>${result.status ? '✅ Successo' : '❌ Fallito'}</strong>
+                            ${result.file ? ` &mdash; <small>File: <code>${result.file}</code></small>` : ''}
+                        </div>
+                        <pre style="margin: 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; font-size: 0.85rem; font-family: monospace; white-space: pre-wrap; word-break: break-all;">${result.message || 'Nessun messaggio restituito.'}</pre>
                     `;
                     logContainer.appendChild(div);
                 });
-                // Ricarica la pagina dopo 3 secondi per vedere i nuovi file nella tabella
-                setTimeout(() => location.reload(), 3000);
+                loadLogs();
+                // Ricarica solo se tutti i backup hanno avuto successo
+                if (!hasFailure) {
+                    setTimeout(() => location.reload(), 3000);
+                }
             })
             .catch(err => {
-                logContainer.innerHTML = `<div class="card" style="border-left: 4px solid var(--danger)"><strong>Errore Critico</strong>: ${err.response?.data?.message || err.message}</div>`;
+                const errorMsg = err.response?.data?.message || err.message;
+                logContainer.innerHTML = `
+                    <div class="card" style="border-left: 4px solid var(--danger)">
+                        <strong>❌ Errore Critico</strong>
+                        <pre style="margin: 8px 0 0 0; background: #fef2f2; border: 1px solid #fee2e2; border-radius: 4px; padding: 10px; font-size: 0.85rem; font-family: monospace; white-space: pre-wrap;">${errorMsg}</pre>
+                    </div>
+                `;
+                loadLogs();
             })
             .finally(() => {
                 btn.disabled = false;
