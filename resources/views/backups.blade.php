@@ -6,7 +6,7 @@
         --warning: #f59e0b;
         --bg: #f9fafb;
     }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 2rem; color: #1f2937; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); padding: 2rem; color: #1f2937; }
     .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 1.5rem; margin-bottom: 2rem; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th { background: #f3f4f6; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb; }
@@ -22,10 +22,7 @@
     .badge { padding: 4px 8px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; background: #e0e7ff; color: var(--primary); }
 </style>
 
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
-{{-- CSRF token for axios --}}
+{{-- CSRF token for AJAX requests --}}
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
 <div class="card">
@@ -36,22 +33,41 @@
 </div>
 
 <script>
-    // Set CSRF token for all axios requests
-    axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    async function apiRequest(url, options = {}) {
+        const headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+            ...(options.headers || {})
+        };
+        if (options.body && typeof options.body === 'object') {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.body);
+        }
+        const response = await fetch(url, { ...options, headers });
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json') ? await response.json() : await response.text();
+        if (!response.ok) {
+            const errorMsg = (typeof data === 'object' && data?.message) ? data.message : (typeof data === 'string' && data ? data : response.statusText);
+            throw new Error(errorMsg || `Errore HTTP ${response.status}`);
+        }
+        return data;
+    }
 
     function deleteBackup(fileName, connection) {
         if (confirm("Sei sicuro di voler eliminare il backup '" + fileName + "'?")) {
-            axios.post("{{ route('backup.delete') }}", { file: fileName, connection: connection })
+            apiRequest("{{ route('backup.delete') }}", { method: 'POST', body: { file: fileName, connection: connection } })
                 .then(() => { alert("Backup eliminato."); location.reload(); })
-                .catch(err => alert("Errore: " + (err.response?.data?.message || err.message)));
+                .catch(err => alert("Errore: " + err.message));
         }
     }
 
     function loadLogs() {
-        axios.get("{{ route('backup.logs') }}")
-            .then(res => {
-                document.getElementById('daily-logs').innerText = res.data;
+        apiRequest("{{ route('backup.logs') }}")
+            .then(data => {
+                document.getElementById('daily-logs').innerText = data;
             })
             .catch(() => {
                 document.getElementById('daily-logs').innerText = "Impossibile caricare i log.";
@@ -67,15 +83,15 @@
             btn.disabled = true;
             btn.innerText = "Ripristino...";
             
-            axios.post("{{ route('backup.restore') }}", { file: fileName, connection: connection })
+            apiRequest("{{ route('backup.restore') }}", { method: 'POST', body: { file: fileName, connection: connection } })
                 .then(res => {
-                    if (res.data.status) {
+                    if (res.status) {
                         alert("Ripristino completato con successo!");
                         loadLogs();
                     }
-                    else alert("Errore: " + res.data.message);
+                    else alert("Errore: " + res.message);
                 })
-                .catch(err => alert("Errore critico durante il ripristino: " + (err.response?.data?.message || err.message)))
+                .catch(err => alert("Errore critico durante il ripristino: " + err.message))
                 .finally(() => {
                     btn.disabled = false;
                     btn.innerText = "Restore";
@@ -90,11 +106,11 @@
         const logContainer = document.getElementById('backup-logs');
         logContainer.innerHTML = '<div class="card"><strong>Avvio backup in corso...</strong></div>';
         
-        axios.post("{{ route('backup.create') }}")
-            .then(res => {
+        apiRequest("{{ route('backup.create') }}", { method: 'POST' })
+            .then(data => {
                 logContainer.innerHTML = '';
                 let hasFailure = false;
-                res.data.forEach(result => {
+                data.forEach(result => {
                     if (!result.status) hasFailure = true;
                     const div = document.createElement('div');
                     div.className = 'card';
@@ -115,11 +131,10 @@
                 }
             })
             .catch(err => {
-                const errorMsg = err.response?.data?.message || err.message;
                 logContainer.innerHTML = `
                     <div class="card" style="border-left: 4px solid var(--danger)">
                         <strong>❌ Errore Critico</strong>
-                        <pre style="margin: 8px 0 0 0; background: #fef2f2; border: 1px solid #fee2e2; border-radius: 4px; padding: 10px; font-size: 0.85rem; font-family: monospace; white-space: pre-wrap;">${errorMsg}</pre>
+                        <pre style="margin: 8px 0 0 0; background: #fef2f2; border: 1px solid #fee2e2; border-radius: 4px; padding: 10px; font-size: 0.85rem; font-family: monospace; white-space: pre-wrap;">${err.message}</pre>
                     </div>
                 `;
                 loadLogs();
