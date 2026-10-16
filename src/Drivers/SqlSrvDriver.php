@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
 use SalvatoreCervone\BackupDatabase\Exceptions\DriverException;
+use SalvatoreCervone\BackupDatabase\Support\EncodingHelper;
 
 class SqlSrvDriver implements BackupDriver
 {
@@ -51,8 +52,8 @@ class SqlSrvDriver implements BackupDriver
             '-Q', $script,
         ]);
 
-        $output = trim($result->output());
-        $errorOutput = trim($result->errorOutput());
+        $output = EncodingHelper::toUtf8(trim($result->output()));
+        $errorOutput = EncodingHelper::toUtf8(trim($result->errorOutput()));
         $fullOutput = trim($output.($errorOutput ? "\n".$errorOutput : ''));
 
         Log::info("SqlSrvDriver output per {$dbname}: ".($fullOutput ?: '(nessun output)'));
@@ -104,8 +105,8 @@ class SqlSrvDriver implements BackupDriver
             '-Q', $script,
         ]);
 
-        $output = trim($result->output());
-        $errorOutput = trim($result->errorOutput());
+        $output = EncodingHelper::toUtf8(trim($result->output()));
+        $errorOutput = EncodingHelper::toUtf8(trim($result->errorOutput()));
         $fullOutput = trim($output.($errorOutput ? "\n".$errorOutput : ''));
 
         Log::info("SqlSrvDriver output ripristino per {$dbname}: ".($fullOutput ?: '(nessun output)'));
@@ -167,7 +168,7 @@ class SqlSrvDriver implements BackupDriver
 
         return [
             'status' => false,
-            'message' => 'Verifica fallita: '.($result->errorOutput() ?: 'Backup corrotto o non leggibile.'),
+            'message' => 'Verifica fallita: '.EncodingHelper::toUtf8($result->errorOutput() ?: 'Backup corrotto o non leggibile.'),
         ];
     }
 
