@@ -9,7 +9,7 @@ class NativeDriver implements FilesystemDriver
 {
     public function listFiles(string $path, string $filter = '*'): array
     {
-        $files = File::glob($path.$filter);
+        $files = File::glob($path.$filter) ?: [];
         $list = [];
 
         foreach ($files as $file) {

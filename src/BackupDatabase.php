@@ -10,6 +10,7 @@ use SalvatoreCervone\BackupDatabase\Drivers\Filesystem\FilesystemFactory;
 use SalvatoreCervone\BackupDatabase\Exceptions\BackupException;
 use SalvatoreCervone\BackupDatabase\Mail\BackupFailedMail;
 use SalvatoreCervone\BackupDatabase\Security\PathValidator;
+use SalvatoreCervone\BackupDatabase\Support\EncodingHelper;
 
 class BackupDatabase
 {
@@ -61,16 +62,17 @@ class BackupDatabase
                 }
 
             } catch (\Exception $e) {
-                Log::error("BackupDatabase Error [{$connectionName}]: ".$e->getMessage());
-                $this->logOperation('BACKUP ERROR', "Connessione: {$connectionName} - Exception: ".$e->getMessage());
+                $errorMsg = EncodingHelper::toUtf8($e->getMessage());
+                Log::error("BackupDatabase Error [{$connectionName}]: ".$errorMsg);
+                $this->logOperation('BACKUP ERROR', "Connessione: {$connectionName} - Exception: ".$errorMsg);
 
-                $this->notifyFailure($connectionName, $e->getMessage());
+                $this->notifyFailure($connectionName, $errorMsg);
 
-                $results[] = ['status' => false, 'message' => "{$connectionName}: ".$e->getMessage()];
+                $results[] = ['status' => false, 'message' => "{$connectionName}: ".$errorMsg];
             }
         }
 
-        return $results;
+        return EncodingHelper::toUtf8($results);
     }
 
     /**
@@ -114,12 +116,13 @@ class BackupDatabase
             ];
 
         } catch (\Exception $e) {
-            Log::error("Restore Error [{$connectionName}]: ".$e->getMessage());
-            $this->logOperation('RESTORE FAILED', "Connessione: {$connectionName} - File: {$fileName} - Errore: ".$e->getMessage());
+            $errorMsg = EncodingHelper::toUtf8($e->getMessage());
+            Log::error("Restore Error [{$connectionName}]: ".$errorMsg);
+            $this->logOperation('RESTORE FAILED', "Connessione: {$connectionName} - File: {$fileName} - Errore: ".$errorMsg);
 
             return [
                 'status' => false,
-                'message' => 'Ripristino fallito: '.$e->getMessage(),
+                'message' => 'Ripristino fallito: '.$errorMsg,
             ];
         }
     }
@@ -131,7 +134,7 @@ class BackupDatabase
     {
         $logPath = storage_path('logs/backup-database-'.date('Y-m-d').'.log');
         if (File::exists($logPath)) {
-            return File::get($logPath);
+            return EncodingHelper::toUtf8(File::get($logPath));
         }
 
         return 'Nessun log disponibile per oggi.';
@@ -166,7 +169,7 @@ class BackupDatabase
             }
         }
 
-        return $listGlobalFile;
+        return EncodingHelper::toUtf8($listGlobalFile);
     }
 
     /**
@@ -286,7 +289,8 @@ class BackupDatabase
 
         $logPath = storage_path('logs/backup-database-'.date('Y-m-d').'.log');
         $timestamp = date('Y-m-d H:i:s');
-        $logEntry = "[{$timestamp}] [{$type}] {$message}".PHP_EOL;
+        $cleanMessage = EncodingHelper::toUtf8($message);
+        $logEntry = "[{$timestamp}] [{$type}] {$cleanMessage}".PHP_EOL;
 
         try {
             File::append($logPath, $logEntry);

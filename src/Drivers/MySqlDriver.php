@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use SalvatoreCervone\BackupDatabase\Contracts\BackupDriver;
 use SalvatoreCervone\BackupDatabase\Exceptions\DriverException;
+use SalvatoreCervone\BackupDatabase\Support\EncodingHelper;
 
 class MySqlDriver implements BackupDriver
 {
@@ -45,7 +46,7 @@ class MySqlDriver implements BackupDriver
             ];
         }
 
-        $error = trim($result->errorOutput() ?: $result->output()) ?: 'Errore durante il backup MySQL.';
+        $error = EncodingHelper::toUtf8(trim($result->errorOutput() ?: $result->output()) ?: 'Errore durante il backup MySQL.');
         throw new DriverException($error);
     }
 
@@ -83,6 +84,7 @@ class MySqlDriver implements BackupDriver
             ];
         }
 
-        throw new DriverException($result->errorOutput() ?: 'Errore durante il ripristino MySQL.');
+        $error = EncodingHelper::toUtf8($result->errorOutput() ?: 'Errore durante il ripristino MySQL.');
+        throw new DriverException($error);
     }
 }
