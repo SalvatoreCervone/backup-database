@@ -262,14 +262,16 @@ class BackupDatabase
 
     /**
      * Ensure a directory exists on the local filesystem.
-     * Does not create directories on SMB paths (handled by the SMB driver).
+     * Does not create directories on SMB/UNC paths (handled remotely or by the SMB driver).
      */
     protected function ensureDirectoryExists(string $path): void
     {
-        if (PHP_OS_FAMILY === 'Windows' || (! str_starts_with($path, '//') && ! str_starts_with($path, 'smb:'))) {
-            if (! is_dir($path)) {
-                mkdir($path, 0777, true);
-            }
+        if (str_starts_with($path, '//') || str_starts_with($path, '\\\\') || str_starts_with($path, 'smb:')) {
+            return;
+        }
+
+        if (! is_dir($path)) {
+            mkdir($path, 0777, true);
         }
     }
 

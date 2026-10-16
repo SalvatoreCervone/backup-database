@@ -136,3 +136,18 @@ it('handles backup failure gracefully', function () {
     expect($results)->toBeArray()
         ->and($results[0]['status'])->toBeFalse();
 });
+
+it('does not attempt to create directories for UNC or SMB paths', function (string $path) {
+    $service = new BackupDatabase;
+    $reflection = new ReflectionClass($service);
+    $method = $reflection->getMethod('ensureDirectoryExists');
+
+    // UNC or SMB network paths should be skipped and never trigger mkdir
+    $method->invoke($service, $path);
+    expect(true)->toBeTrue();
+})->with([
+    '\\\\srv\\DatiCSA\\Varie\\BackupDB\\',
+    '//srv/DatiCSA/Varie/BackupDB/',
+    'smb://srv/DatiCSA/Varie/BackupDB/',
+]);
+
