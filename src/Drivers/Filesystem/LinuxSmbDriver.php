@@ -2,6 +2,7 @@
 
 namespace SalvatoreCervone\BackupDatabase\Drivers\Filesystem;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use SalvatoreCervone\BackupDatabase\Contracts\FilesystemDriver;
 use SalvatoreCervone\BackupDatabase\Exceptions\SmbException;
@@ -69,6 +70,8 @@ class LinuxSmbDriver implements FilesystemDriver
             return true;
         }
 
+        Log::warning("LinuxSmbDriver: del fallito per {$winPath}: ".trim($result->errorOutput() ?: $result->output()));
+
         return false;
     }
 
@@ -83,17 +86,40 @@ class LinuxSmbDriver implements FilesystemDriver
         $sourceWinPath = str_replace('/', '\\', $details['remainingPath']);
         $targetWinPath = str_replace('/', '\\', $targetDetails['remainingPath']);
 
-        $targetDir = dirname($targetWinPath);
-        $cmd = "mkdir \"{$targetDir}\"; rename \"{$sourceWinPath}\" \"{$targetWinPath}\"";
+        // Compute parent directory on the normalized forward-slash path before converting to backslashes
+        // (PHP's dirname() on Linux only splits on '/', not '\').
+        $targetDirUnix = dirname($targetDetails['remainingPath']);
+        if ($targetDirUnix !== '.' && $targetDirUnix !== '' && $targetDirUnix !== '/') {
+            $targetDirWin = str_replace('/', '\\', $targetDirUnix);
 
-        $result = Process::run([
+            $mkdirResult = Process::run([
+                $this->binPath,
+                "//{$details['host']}/{$details['share']}",
+                '-U', "{$this->user}%{$this->password}",
+                '-c', "mkdir \"{$targetDirWin}\"",
+            ]);
+
+            $mkdirOutput = trim($mkdirResult->errorOutput().' '.$mkdirResult->output());
+            if ($mkdirResult->failed() && ! str_contains($mkdirOutput, 'NT_STATUS_OBJECT_NAME_COLLISION')) {
+                Log::warning("LinuxSmbDriver: mkdir fallito per {$targetDirWin}: {$mkdirOutput}");
+            }
+        }
+
+        $renameResult = Process::run([
             $this->binPath,
             "//{$details['host']}/{$details['share']}",
             '-U', "{$this->user}%{$this->password}",
-            '-c', $cmd,
+            '-c', "rename \"{$sourceWinPath}\" \"{$targetWinPath}\"",
         ]);
 
-        return $result->successful() || str_contains($result->errorOutput(), 'NT_STATUS_OBJECT_NAME_COLLISION');
+        if (! $renameResult->successful()) {
+            $renameOutput = trim($renameResult->errorOutput().' '.$renameResult->output());
+            Log::warning("LinuxSmbDriver: rename fallito da {$sourceWinPath} a {$targetWinPath}: {$renameOutput}");
+
+            return false;
+        }
+
+        return true;
     }
 
     protected function parseSmbPath(string $path): ?array
@@ -131,11 +157,12 @@ class LinuxSmbDriver implements FilesystemDriver
 
             if (preg_match('/^\s*(.*?)\s+([A-Z]*)\s+(\d+)\s+(.*)$/', $line, $matches)) {
                 $fileName = trim($matches[1]);
-                if ($fileName === '.' || $fileName === '..') {
+                $attributes = $matches[2];
+                if ($fileName === '.' || $fileName === '..' || str_contains($attributes, 'D')) {
                     continue;
                 }
 
-                if ($filter !== '*' && ! fnmatch($filter, $fileName)) {
+                if ($filter !== '*' && ! fnmatch($filter, $fileName, FNM_CASEFOLD)) {
                     continue;
                 }
 

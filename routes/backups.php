@@ -17,4 +17,7 @@ Route::middleware($middleware)->prefix($prefix)->group(function () {
     Route::post('/delete', [BackupController::class, 'delete'])->name('backup.delete');
     Route::post('/restore', [BackupController::class, 'restore'])->name('backup.restore');
     Route::get('/logs', [BackupController::class, 'logs'])->name('backup.logs');
+    Route::get('/settings/mail', [BackupController::class, 'getMailSettings'])->name('backup.settings.mail.get');
+    Route::post('/settings/mail', [BackupController::class, 'saveMailSettings'])->name('backup.settings.mail.save');
+    Route::post('/settings/mail/test', [BackupController::class, 'testMailSettings'])->name('backup.settings.mail.test');
 });

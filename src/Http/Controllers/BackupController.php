@@ -7,12 +7,25 @@ use Illuminate\Routing\Controller;
 use SalvatoreCervone\BackupDatabase\BackupDatabase;
 use SalvatoreCervone\BackupDatabase\Http\Requests\DeleteBackupRequest;
 use SalvatoreCervone\BackupDatabase\Http\Requests\RestoreBackupRequest;
+use SalvatoreCervone\BackupDatabase\Http\Requests\SaveMailSettingsRequest;
+use SalvatoreCervone\BackupDatabase\Http\Requests\TestMailSettingsRequest;
+use SalvatoreCervone\BackupDatabase\Support\BackupNotifier;
+use SalvatoreCervone\BackupDatabase\Support\MailSettingsManager;
 
 class BackupController extends Controller
 {
+    protected MailSettingsManager $mailSettings;
+
+    protected BackupNotifier $notifier;
+
     public function __construct(
-        protected BackupDatabase $backupService
-    ) {}
+        protected BackupDatabase $backupService,
+        ?MailSettingsManager $mailSettings = null,
+        ?BackupNotifier $notifier = null
+    ) {
+        $this->mailSettings = $mailSettings ?? new MailSettingsManager;
+        $this->notifier = $notifier ?? new BackupNotifier($this->mailSettings);
+    }
 
     /**
      * Display the backup dashboard.
@@ -21,6 +34,7 @@ class BackupController extends Controller
     {
         return view('backup-database::backups', [
             'listBackups' => $this->backupService->getStatus(),
+            'mailSettings' => $this->mailSettings->getForUi(),
         ]);
     }
 
@@ -72,5 +86,37 @@ class BackupController extends Controller
     public function logs(): string
     {
         return $this->backupService->getLogs();
+    }
+
+    /**
+     * Get current email notification and SMTP settings (with .env fallback info).
+     */
+    public function getMailSettings(): JsonResponse
+    {
+        return response()->json($this->mailSettings->getForUi());
+    }
+
+    /**
+     * Save email notification and SMTP settings.
+     */
+    public function saveMailSettings(SaveMailSettingsRequest $request): JsonResponse
+    {
+        $saved = $this->mailSettings->save($request->validated());
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Impostazioni email salvate correttamente.',
+            'settings' => $saved,
+        ]);
+    }
+
+    /**
+     * Send a test notification email using effective (panel or .env) SMTP settings.
+     */
+    public function testMailSettings(TestMailSettingsRequest $request): JsonResponse
+    {
+        $result = $this->notifier->sendTest($request->validated('recipient'));
+
+        return response()->json($result, $result['status'] ? 200 : 422);
     }
 }
