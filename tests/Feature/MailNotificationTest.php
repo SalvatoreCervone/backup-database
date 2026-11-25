@@ -538,3 +538,21 @@ it('dispatches backup notification emails to the Laravel queue via SendBackupNot
     });
     Queue::assertPushed(SendBackupNotificationJob::class, 1);
 });
+
+it('dispatches test email through SendBackupNotificationJob when use_queue is enabled', function () {
+    Queue::fake();
+
+    config(['backup-database.notifications.use_queue' => true]);
+    config(['backup-database.notifications.queue_name' => 'emails']);
+
+    $notifier = new BackupNotifier;
+    $result = $notifier->sendTest('queued-test@example.com');
+
+    expect($result['status'])->toBeTrue()
+        ->and($result['queued'])->toBeTrue();
+
+    Queue::assertPushedOn('emails', SendBackupNotificationJob::class, function (SendBackupNotificationJob $job) {
+        return $job->mailable instanceof TestNotificationMail
+            && $job->recipients === ['queued-test@example.com'];
+    });
+});

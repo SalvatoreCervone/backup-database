@@ -95,10 +95,38 @@ class BackupNotifier
         }
 
         try {
-            $this->sendMailable(new TestNotificationMail($effective['source']), [$email], $effective, 'test');
+            $mailable = new TestNotificationMail($effective['source']);
+
+            if (config('backup-database.notifications.use_queue', true)) {
+                $job = new SendBackupNotificationJob($mailable, [$email]);
+
+                if ($connection = config('backup-database.notifications.queue_connection')) {
+                    $job->onConnection($connection);
+                }
+
+                if ($queue = config('backup-database.notifications.queue_name')) {
+                    $job->onQueue($queue);
+                }
+
+                try {
+                    app(Dispatcher::class)->dispatch($job);
+
+                    return [
+                        'status' => true,
+                        'queued' => true,
+                        'message' => 'Email di test accodata correttamente per: '.$email,
+                        'smtp_source' => $effective['source'],
+                    ];
+                } catch (\Exception $queueException) {
+                    Log::warning('BackupDatabase: Impossibile accodare la mail di test, invio sincrono di fallback: '.$queueException->getMessage());
+                }
+            }
+
+            $this->sendMailable($mailable, [$email], $effective, 'test');
 
             return [
                 'status' => true,
+                'queued' => false,
                 'message' => 'Email di test inviata correttamente a: '.$email,
                 'smtp_source' => $effective['source'],
             ];
