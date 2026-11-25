@@ -102,12 +102,23 @@ return [
     | Email Notifications
     |--------------------------------------------------------------------------
     |
-    | Set an email address to receive notifications when a backup fails.
-    | Requires your Laravel application to have SMTP/mail configured.
+    | Configure default email notification settings. These can be overridden
+    | from the web dashboard panel. If SMTP fields in the panel are left empty,
+    | Laravel's default mail configuration (.env) will be used automatically.
     |
     */
 
     'notification_email' => env('BACKUP_NOTIFICATION_EMAIL'),
+
+    'notifications' => [
+        'on_success' => env('BACKUP_NOTIFY_ON_SUCCESS', false),
+        'on_failure' => env('BACKUP_NOTIFY_ON_FAILURE', true),
+        'summary' => env('BACKUP_NOTIFY_SUMMARY', false),
+        'settings_path' => env('BACKUP_SETTINGS_PATH'),
+        'use_queue' => env('BACKUP_MAIL_QUEUE', true),
+        'queue_connection' => env('BACKUP_MAIL_QUEUE_CONNECTION'),
+        'queue_name' => env('BACKUP_MAIL_QUEUE_NAME'),
+    ],
 
     /*
     |--------------------------------------------------------------------------
