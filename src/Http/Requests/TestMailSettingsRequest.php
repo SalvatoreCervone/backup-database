@@ -14,13 +14,14 @@ class TestMailSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'recipient' => ['nullable', 'email', 'max:255'],
+            'recipient' => ['required', 'email', 'max:255'],
         ];
     }
 
     public function messages(): array
     {
         return [
+            'recipient.required' => 'Inserisci un indirizzo email per inviare il test.',
             'recipient.email' => 'L\'indirizzo email di test non è valido.',
         ];
     }

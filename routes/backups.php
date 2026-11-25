@@ -20,4 +20,5 @@ Route::middleware($middleware)->prefix($prefix)->group(function () {
     Route::get('/settings/mail', [BackupController::class, 'getMailSettings'])->name('backup.settings.mail.get');
     Route::post('/settings/mail', [BackupController::class, 'saveMailSettings'])->name('backup.settings.mail.save');
     Route::post('/settings/mail/test', [BackupController::class, 'testMailSettings'])->name('backup.settings.mail.test');
+    Route::get('/settings/mail/history', [BackupController::class, 'getMailHistory'])->name('backup.settings.mail.history');
 });

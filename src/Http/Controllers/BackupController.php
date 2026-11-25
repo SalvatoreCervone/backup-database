@@ -10,21 +10,26 @@ use SalvatoreCervone\BackupDatabase\Http\Requests\RestoreBackupRequest;
 use SalvatoreCervone\BackupDatabase\Http\Requests\SaveMailSettingsRequest;
 use SalvatoreCervone\BackupDatabase\Http\Requests\TestMailSettingsRequest;
 use SalvatoreCervone\BackupDatabase\Support\BackupNotifier;
+use SalvatoreCervone\BackupDatabase\Support\MailHistoryManager;
 use SalvatoreCervone\BackupDatabase\Support\MailSettingsManager;
 
 class BackupController extends Controller
 {
     protected MailSettingsManager $mailSettings;
 
+    protected MailHistoryManager $mailHistory;
+
     protected BackupNotifier $notifier;
 
     public function __construct(
         protected BackupDatabase $backupService,
         ?MailSettingsManager $mailSettings = null,
-        ?BackupNotifier $notifier = null
+        ?BackupNotifier $notifier = null,
+        ?MailHistoryManager $mailHistory = null
     ) {
         $this->mailSettings = $mailSettings ?? new MailSettingsManager;
-        $this->notifier = $notifier ?? new BackupNotifier($this->mailSettings);
+        $this->mailHistory = $mailHistory ?? new MailHistoryManager;
+        $this->notifier = $notifier ?? new BackupNotifier($this->mailSettings, $this->mailHistory);
     }
 
     /**
@@ -35,6 +40,7 @@ class BackupController extends Controller
         return view('backup-database::backups', [
             'listBackups' => $this->backupService->getStatus(),
             'mailSettings' => $this->mailSettings->getForUi(),
+            'mailHistory' => $this->mailHistory->all(),
         ]);
     }
 
@@ -111,12 +117,22 @@ class BackupController extends Controller
     }
 
     /**
-     * Send a test notification email using effective (panel or .env) SMTP settings.
+     * Send a test notification email to the single specified email address.
      */
     public function testMailSettings(TestMailSettingsRequest $request): JsonResponse
     {
         $result = $this->notifier->sendTest($request->validated('recipient'));
 
         return response()->json($result, $result['status'] ? 200 : 422);
+    }
+
+    /**
+     * Return the sent email history log.
+     */
+    public function getMailHistory(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->mailHistory->all(),
+        ]);
     }
 }

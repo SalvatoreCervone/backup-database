@@ -115,6 +115,7 @@ return [
         'on_failure' => env('BACKUP_NOTIFY_ON_FAILURE', true),
         'summary' => env('BACKUP_NOTIFY_SUMMARY', false),
         'settings_path' => env('BACKUP_SETTINGS_PATH'),
+        'history_path' => env('BACKUP_MAIL_HISTORY_PATH'),
         'use_queue' => env('BACKUP_MAIL_QUEUE', true),
         'queue_connection' => env('BACKUP_MAIL_QUEUE_CONNECTION'),
         'queue_name' => env('BACKUP_MAIL_QUEUE_NAME'),

@@ -16,10 +16,14 @@ class BackupNotifier
 {
     public const CUSTOM_MAILER = 'backup_database_smtp';
 
+    protected MailHistoryManager $history;
+
     public function __construct(
-        protected ?MailSettingsManager $settings = null
+        protected ?MailSettingsManager $settings = null,
+        ?MailHistoryManager $history = null
     ) {
         $this->settings = $settings ?? new MailSettingsManager;
+        $this->history = $history ?? new MailHistoryManager;
     }
 
     /**
@@ -64,22 +68,20 @@ class BackupNotifier
     }
 
     /**
-     * Send a test notification email using the effective (panel or .env) SMTP configuration.
+     * Send a test notification email ONLY to the explicitly specified single recipient.
+     * Never broadcasts to all configured notification recipients.
      *
      * @return array{status: bool, message: string, smtp_source: string}
      */
-    public function sendTest(?string $recipientOverride = null): array
+    public function sendTest(?string $recipient = null): array
     {
-        $recipients = $recipientOverride !== null && trim($recipientOverride) !== ''
-            ? MailSettingsManager::parseRecipients($recipientOverride)
-            : $this->settings->getRecipients();
-
         $effective = $this->settings->getEffectiveSmtpConfig();
+        $email = trim((string) $recipient);
 
-        if (empty($recipients)) {
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return [
                 'status' => false,
-                'message' => 'Nessun indirizzo email destinatario configurato.',
+                'message' => 'Inserisci un indirizzo email valido per inviare il test.',
                 'smtp_source' => $effective['source'],
             ];
         }
@@ -87,17 +89,17 @@ class BackupNotifier
         if (! $effective['is_configured']) {
             return [
                 'status' => false,
-                'message' => 'Configurazione SMTP mancante sia nel pannello che nel file .env.',
+                'message' => 'Configurazione SMTP mancante per la modalità selezionata.',
                 'smtp_source' => $effective['source'],
             ];
         }
 
         try {
-            $this->sendMailable(new TestNotificationMail($effective['source']), $recipients, $effective);
+            $this->sendMailable(new TestNotificationMail($effective['source']), [$email], $effective, 'test');
 
             return [
                 'status' => true,
-                'message' => 'Email di test inviata correttamente a: '.implode(', ', $recipients),
+                'message' => 'Email di test inviata correttamente a: '.$email,
                 'smtp_source' => $effective['source'],
             ];
         } catch (\Exception $e) {
@@ -125,7 +127,7 @@ class BackupNotifier
         $effective = $this->settings->getEffectiveSmtpConfig();
 
         if (! $effective['is_configured']) {
-            Log::warning('BackupDatabase: Impossibile inviare email di notifica — configurazione SMTP non trovata né nel pannello né nel file .env.');
+            Log::warning('BackupDatabase: Impossibile inviare email di notifica — configurazione SMTP non trovata.');
 
             return;
         }
@@ -178,40 +180,95 @@ class BackupNotifier
     }
 
     /**
-     * Configure dynamic mailer when panel SMTP overrides exist, otherwise use default Laravel mailer (.env).
+     * Configure dynamic mailer when manual SMTP mode is active, otherwise use default Laravel mailer (.env).
+     * Records every send attempt in MailHistoryManager.
      *
      * @param  array<int, string>  $recipients
      * @param  array<string, mixed>  $effective
      */
-    protected function sendMailable(Mailable $mailable, array $recipients, array $effective): void
+    protected function sendMailable(Mailable $mailable, array $recipients, array $effective, ?string $type = null): void
     {
+        $resolvedType = $type ?? $this->detectMailableType($mailable);
+        $subject = $this->resolveMailableSubject($mailable);
+
         if (! empty($effective['from_address'])) {
             $mailable->from($effective['from_address'], $effective['from_name'] ?: null);
         }
 
-        if ($this->settings->hasCustomSmtpSettings()) {
-            config([
-                'mail.mailers.'.self::CUSTOM_MAILER => [
-                    'transport' => 'smtp',
-                    'host' => $effective['host'],
-                    'port' => $effective['port'] ?? 587,
-                    'encryption' => $effective['encryption'],
-                    'username' => $effective['username'],
-                    'password' => $effective['password'],
-                    'timeout' => null,
-                ],
-            ]);
+        try {
+            if ($this->settings->hasCustomSmtpSettings()) {
+                config([
+                    'mail.mailers.'.self::CUSTOM_MAILER => [
+                        'transport' => 'smtp',
+                        'host' => $effective['host'],
+                        'port' => $effective['port'] ?? 587,
+                        'encryption' => $effective['encryption'],
+                        'username' => $effective['username'],
+                        'password' => $effective['password'],
+                        'timeout' => null,
+                    ],
+                ]);
 
-            $root = Mail::getFacadeRoot();
-            if ($root !== null && method_exists($root, 'purge')) {
-                Mail::purge(self::CUSTOM_MAILER);
+                $root = Mail::getFacadeRoot();
+                if ($root !== null && method_exists($root, 'purge')) {
+                    Mail::purge(self::CUSTOM_MAILER);
+                }
+
+                Mail::mailer(self::CUSTOM_MAILER)->to($recipients)->send($mailable);
+            } else {
+                Mail::to($recipients)->send($mailable);
             }
 
-            Mail::mailer(self::CUSTOM_MAILER)->to($recipients)->send($mailable);
+            $this->history->record([
+                'type' => $resolvedType,
+                'subject' => $subject,
+                'recipients' => $recipients,
+                'smtp_source' => $effective['source'],
+                'status' => 'sent',
+                'error' => null,
+            ]);
+        } catch (\Throwable $e) {
+            $this->history->record([
+                'type' => $resolvedType,
+                'subject' => $subject,
+                'recipients' => $recipients,
+                'smtp_source' => $effective['source'],
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ]);
 
-            return;
+            throw $e;
+        }
+    }
+
+    protected function detectMailableType(Mailable $mailable): string
+    {
+        return match (true) {
+            $mailable instanceof BackupSuccessMail => 'success',
+            $mailable instanceof BackupFailedMail => 'failure',
+            $mailable instanceof BackupSummaryMail => 'summary',
+            $mailable instanceof TestNotificationMail => 'test',
+            default => 'other',
+        };
+    }
+
+    protected function resolveMailableSubject(Mailable $mailable): string
+    {
+        if (method_exists($mailable, 'envelope')) {
+            try {
+                $envelope = $mailable->envelope();
+                if (! empty($envelope->subject)) {
+                    return (string) $envelope->subject;
+                }
+            } catch (\Throwable) {
+                // Fallback below
+            }
         }
 
-        Mail::to($recipients)->send($mailable);
+        if (! empty($mailable->subject)) {
+            return (string) $mailable->subject;
+        }
+
+        return class_basename($mailable);
     }
 }
