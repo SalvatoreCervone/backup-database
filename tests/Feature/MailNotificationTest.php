@@ -267,6 +267,58 @@ it('sends only BackupFailedMail when notification_type is failure and backup fai
     Mail::assertNotSent(BackupSummaryMail::class);
 });
 
+it('sends ONE single consolidated BackupFailedMail for the entire backup set when multiple connections fail', function () {
+    Mail::fake();
+    Process::fake([
+        '*' => Process::result(output: '', errorOutput: 'Connection refused', exitCode: 1),
+    ]);
+
+    $manager = new MailSettingsManager;
+    $manager->save([
+        'notification_type' => 'failure',
+        'recipients' => ['alerts@example.com'],
+        'smtp_mode' => 'env',
+    ]);
+
+    config(['backup-database.listconnections' => [
+        [
+            'connection' => 'mysql_a',
+            'destinationpath' => '/tmp/',
+            'db_name' => 'db_a',
+            'daily' => false,
+        ],
+        [
+            'connection' => 'mysql_b',
+            'destinationpath' => '/tmp/',
+            'db_name' => 'db_b',
+            'daily' => false,
+        ],
+        [
+            'connection' => 'mysql_c',
+            'destinationpath' => '/tmp/',
+            'db_name' => 'db_c',
+            'daily' => false,
+        ],
+    ]]);
+    foreach (['mysql_a', 'mysql_b', 'mysql_c'] as $conn) {
+        config(["database.connections.{$conn}" => [
+            'driver' => 'mysql',
+            'host' => 'localhost',
+            'database' => $conn,
+            'username' => 'root',
+            'password' => 'password',
+        ]]);
+    }
+
+    (new BackupDatabase)->backup();
+
+    Mail::assertSent(BackupFailedMail::class, 1);
+    Mail::assertSent(BackupFailedMail::class, function (BackupFailedMail $mail) {
+        return $mail->hasTo('alerts@example.com')
+            && count($mail->connectionResults) === 3;
+    });
+});
+
 it('sends only BackupSummaryMail when notification_type is summary', function () {
     Mail::fake();
     Process::fake();

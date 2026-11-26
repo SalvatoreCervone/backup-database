@@ -21,4 +21,9 @@ Route::middleware($middleware)->prefix($prefix)->group(function () {
     Route::post('/settings/mail', [BackupController::class, 'saveMailSettings'])->name('backup.settings.mail.save');
     Route::post('/settings/mail/test', [BackupController::class, 'testMailSettings'])->name('backup.settings.mail.test');
     Route::get('/settings/mail/history', [BackupController::class, 'getMailHistory'])->name('backup.settings.mail.history');
+    Route::get('/settings/trash', [BackupController::class, 'getTrashSettings'])->name('backup.settings.trash.get');
+    Route::post('/settings/trash', [BackupController::class, 'saveTrashSettings'])->name('backup.settings.trash.save');
+    Route::get('/trash', [BackupController::class, 'getTrash'])->name('backup.trash.index');
+    Route::post('/trash/delete', [BackupController::class, 'deleteTrash'])->name('backup.trash.delete');
+    Route::post('/trash/cleanup', [BackupController::class, 'cleanupTrash'])->name('backup.trash.cleanup');
 });

@@ -91,6 +91,9 @@
     $notificationType = $ms['notification_type'] ?? 'failure';
     $initialRecipients = $ms['recipients'] ?? [];
     $initialHistory = $mailHistory ?? [];
+    $ts = $trashSettings ?? ['auto_delete' => false, 'keep_copies' => 2, 'days_for_delete' => null];
+    $initialTrash = $trashBackups ?? [];
+    $initialTrashCount = collect($initialTrash)->reduce(fn ($carry, $items) => $carry + count($items), 0);
 @endphp
 
 <div class="card">
@@ -114,6 +117,10 @@
     <nav class="mini-menu" role="tablist" aria-label="Menu gestione backup e notifiche">
         <button type="button" class="mini-menu-btn active" role="tab" aria-selected="true" aria-controls="panel-backups" id="tab-backups" onclick="switchTab('backups')">
             Backup
+        </button>
+        <button type="button" class="mini-menu-btn" role="tab" aria-selected="false" aria-controls="panel-trash" id="tab-trash" onclick="switchTab('trash')">
+            Cestino (Trash)
+            <span id="trash-count-badge" class="badge badge-neutral">{{ $initialTrashCount }}</span>
         </button>
         <button type="button" class="mini-menu-btn" role="tab" aria-selected="false" aria-controls="panel-settings" id="tab-settings" onclick="switchTab('settings')">
             Impostazioni
@@ -404,6 +411,100 @@
             <div id="mail-settings-feedback" class="alert" role="status" aria-live="polite"></div>
         </form>
     </div>
+
+    {{-- Trash Retention Settings Card --}}
+    <div class="card">
+        <h2 style="margin: 0 0 0.25rem 0; font-size: 1.25rem;">Impostazioni Cestino (Trash)</h2>
+        <span class="form-hint">Configura la cancellazione definitiva automatica dei backup spostati nella cartella <code>trash</code>, garantendo sempre un numero minimo di copie.</span>
+
+        <form id="trash-settings-form" onsubmit="saveTrashSettings(event)" style="margin-top: 1.25rem;">
+            <label class="radio-card" style="margin-bottom: 1rem;">
+                <input type="checkbox" id="trash_auto_delete" name="auto_delete" style="margin-top: 3px; width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;" {{ !empty($ts['auto_delete']) ? 'checked' : '' }}>
+                <span>
+                    <span class="radio-title">Abilita cancellazione automatica nel cestino</span>
+                    <span class="radio-desc">Durante ogni backup, elimina definitivamente dal cestino solo le copie più vecchie in eccesso rispetto al minimo garantito.</span>
+                </span>
+            </label>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="trash_keep_copies">Copie minime da mantenere in trash (per database)</label>
+                    <input
+                        type="number"
+                        id="trash_keep_copies"
+                        name="keep_copies"
+                        class="form-control"
+                        min="0"
+                        max="1000"
+                        required
+                        value="{{ $ts['keep_copies'] ?? 2 }}"
+                    >
+                    <span class="form-hint">Es. <code>2</code> garantisce che almeno le 2 copie più recenti in <code>trash</code> non vengano mai eliminate automaticamente.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="trash_days_for_delete">Elimina solo se più vecchi di (giorni, opzionale)</label>
+                    <input
+                        type="number"
+                        id="trash_days_for_delete"
+                        name="days_for_delete"
+                        class="form-control"
+                        min="0"
+                        max="3650"
+                        value="{{ $ts['days_for_delete'] ?? '' }}"
+                        placeholder="Opzionale (es. 7)"
+                    >
+                    <span class="form-hint">Lascia vuoto per eliminare subito tutte le copie oltre il minimo garantito.</span>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 1.25rem;">
+                <button type="submit" id="btn-save-trash" class="btn btn-primary">Salva Impostazioni Cestino</button>
+            </div>
+
+            <div id="trash-settings-feedback" class="alert" role="status" aria-live="polite"></div>
+        </form>
+    </div>
+</section>
+
+{{-- TAB: CESTINO (TRASH) --}}
+<section id="panel-trash" class="tab-panel" role="tabpanel" aria-labelledby="tab-trash" hidden>
+    <div class="card">
+        <div class="datatable-toolbar">
+            <div>
+                <h2 style="margin: 0; font-size: 1.25rem;">File nel Cestino (Trash)</h2>
+                <span class="form-hint" id="trash-policy-summary">
+                    Auto-cancellazione: {{ !empty($ts['auto_delete']) ? 'Attiva' : 'Disattiva' }} &bull;
+                    Copie minime garantite: {{ $ts['keep_copies'] ?? 2 }}
+                    @if (($ts['days_for_delete'] ?? null) !== null)
+                        &bull; Età minima: {{ $ts['days_for_delete'] }} giorni
+                    @endif
+                </span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <input type="search" id="trash-search" class="form-control datatable-search" placeholder="Cerca file o connessione..." oninput="renderTrashTable()">
+                <button type="button" id="btn-cleanup-trash" class="btn btn-warning btn-sm" onclick="runTrashCleanup()">Pulisci Cestino Ora</button>
+                <button type="button" id="btn-refresh-trash" class="btn btn-primary btn-sm" onclick="loadTrashFiles()">Aggiorna</button>
+            </div>
+        </div>
+
+        <div id="trash-feedback" class="alert" role="status" aria-live="polite"></div>
+
+        <div class="table-wrap">
+            <table id="trash-datatable">
+                <thead>
+                    <tr>
+                        <th>Connessione</th>
+                        <th>Nome File</th>
+                        <th>Dimensione</th>
+                        <th>Ultima Modifica</th>
+                        <th style="width: 190px;">Azioni</th>
+                    </tr>
+                </thead>
+                <tbody id="trash-tbody"></tbody>
+            </table>
+        </div>
+    </div>
 </section>
 
 {{-- TAB 3: ELENCO EMAIL INVIATE --}}
@@ -446,11 +547,13 @@
     let editingRecipientIndex = null;
     let isAddingRecipient = false;
     let mailHistoryList = @json($initialHistory);
+    let trashDataByConnection = @json($initialTrash);
+    let currentTrashSettings = @json($ts);
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     function switchTab(tabName) {
-        const tabs = ['backups', 'settings', 'history'];
+        const tabs = ['backups', 'trash', 'settings', 'history'];
         tabs.forEach(name => {
             const btn = document.getElementById('tab-' + name);
             const panel = document.getElementById('panel-' + name);
@@ -462,6 +565,8 @@
 
         if (tabName === 'history') {
             loadMailHistory();
+        } else if (tabName === 'trash') {
+            loadTrashFiles();
         }
     }
 
@@ -1057,6 +1162,7 @@
                 });
                 loadLogs();
                 loadMailHistory();
+                loadTrashFiles();
                 if (!hasFailure) {
                     setTimeout(() => location.reload(), 3000);
                 }
@@ -1081,10 +1187,221 @@
             });
     }
 
+    // =========================================================================
+    // TRASH VIEWER & RETENTION SETTINGS
+    // =========================================================================
+
+    function showTrashFeedback(message, isSuccess) {
+        const box = document.getElementById('trash-feedback');
+        if (!box) return;
+        box.className = 'alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
+        box.textContent = message;
+    }
+
+    function showTrashSettingsFeedback(message, isSuccess) {
+        const box = document.getElementById('trash-settings-feedback');
+        if (!box) return;
+        box.className = 'alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
+        box.textContent = message;
+    }
+
+    function updateTrashPolicySummary(settings) {
+        currentTrashSettings = settings || currentTrashSettings;
+        const summary = document.getElementById('trash-policy-summary');
+        if (!summary) return;
+        let text = `Auto-cancellazione: ${currentTrashSettings.auto_delete ? 'Attiva' : 'Disattiva'} • Copie minime garantite: ${currentTrashSettings.keep_copies ?? 2}`;
+        if (currentTrashSettings.days_for_delete !== null && currentTrashSettings.days_for_delete !== undefined && currentTrashSettings.days_for_delete !== '') {
+            text += ` • Età minima: ${currentTrashSettings.days_for_delete} giorni`;
+        }
+        summary.textContent = text;
+    }
+
+    function saveTrashSettings(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-save-trash');
+        btn.disabled = true;
+        btn.textContent = 'Salvataggio...';
+
+        const keepVal = document.getElementById('trash_keep_copies').value.trim();
+        const daysVal = document.getElementById('trash_days_for_delete').value.trim();
+
+        const payload = {
+            auto_delete: document.getElementById('trash_auto_delete').checked,
+            keep_copies: keepVal === '' ? 2 : Number(keepVal),
+            days_for_delete: daysVal === '' ? null : Number(daysVal),
+        };
+
+        apiRequest("{{ route('backup.settings.trash.save') }}", { method: 'POST', body: payload })
+            .then(res => {
+                showTrashSettingsFeedback(res.message || 'Impostazioni cestino salvate.', true);
+                if (res.settings) {
+                    updateTrashPolicySummary(res.settings);
+                }
+            })
+            .catch(err => {
+                showTrashSettingsFeedback('Errore salvataggio: ' + err.message, false);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Salva Impostazioni Cestino';
+            });
+    }
+
+    function loadTrashFiles() {
+        const btn = document.getElementById('btn-refresh-trash');
+        if (btn) btn.disabled = true;
+
+        apiRequest("{{ route('backup.trash.index') }}")
+            .then(res => {
+                trashDataByConnection = (res && typeof res.data === 'object' && res.data !== null) ? res.data : {};
+                renderTrashTable();
+            })
+            .catch(() => {
+                // Keep existing list on transient error
+            })
+            .finally(() => {
+                if (btn) btn.disabled = false;
+            });
+    }
+
+    function renderTrashTable() {
+        const tbody = document.getElementById('trash-tbody');
+        const countBadge = document.getElementById('trash-count-badge');
+        const query = (document.getElementById('trash-search')?.value || '').trim().toLowerCase();
+
+        const flatRows = [];
+        Object.entries(trashDataByConnection || {}).forEach(([connection, files]) => {
+            if (!Array.isArray(files)) return;
+            files.forEach(file => {
+                flatRows.push({ connection, ...file });
+            });
+        });
+
+        if (countBadge) {
+            countBadge.textContent = String(flatRows.length);
+        }
+
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const filtered = flatRows.filter(item => {
+            if (!query) return true;
+            const hay = `${item.connection} ${item.name || ''} ${item.modified || ''}`.toLowerCase();
+            return hay.includes(query);
+        });
+
+        if (filtered.length === 0) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 5;
+            td.style.color = '#6b7280';
+            td.textContent = flatRows.length === 0
+                ? 'Il cestino è vuoto.'
+                : 'Nessun file nel cestino corrisponde alla ricerca.';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            return;
+        }
+
+        filtered.forEach(item => {
+            const tr = document.createElement('tr');
+
+            const tdConn = document.createElement('td');
+            const connBadge = document.createElement('span');
+            connBadge.className = 'badge badge-neutral';
+            connBadge.textContent = item.connection;
+            tdConn.appendChild(connBadge);
+
+            const tdName = document.createElement('td');
+            tdName.style.fontFamily = 'monospace';
+            tdName.style.fontSize = '0.88rem';
+            tdName.textContent = item.name || '-';
+
+            const tdSize = document.createElement('td');
+            const sizeMb = ((Number(item.size) || 0) / 1024 / 1024).toFixed(2);
+            tdSize.textContent = `${sizeMb} MB`;
+
+            const tdMod = document.createElement('td');
+            tdMod.textContent = item.modified || '-';
+
+            const tdActions = document.createElement('td');
+            tdActions.className = 'actions-cell';
+            const btnDel = document.createElement('button');
+            btnDel.type = 'button';
+            btnDel.className = 'btn btn-danger btn-sm';
+            btnDel.textContent = 'Elimina definitivamente';
+            btnDel.onclick = () => deleteTrashFile(item.name, item.connection, btnDel);
+            tdActions.appendChild(btnDel);
+
+            tr.append(tdConn, tdName, tdSize, tdMod, tdActions);
+            tbody.appendChild(tr);
+        });
+    }
+
+    function deleteTrashFile(fileName, connection, btn) {
+        if (!confirm(`ATTENZIONE: Vuoi eliminare DEFINITIVAMENTE '${fileName}' dal cestino (${connection})? L'operazione è irreversibile.`)) {
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Eliminazione...';
+        }
+
+        apiRequest("{{ route('backup.trash.delete') }}", { method: 'POST', body: { file: fileName, connection: connection } })
+            .then(res => {
+                showTrashFeedback(res.message || 'File eliminato definitivamente.', !!res.status);
+                loadTrashFiles();
+                loadLogs();
+            })
+            .catch(err => {
+                showTrashFeedback('Errore eliminazione: ' + err.message, false);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Elimina definitivamente';
+                }
+            });
+    }
+
+    function runTrashCleanup() {
+        const keep = currentTrashSettings.keep_copies ?? 2;
+        if (!confirm(`Avviare la pulizia definitiva del cestino ora? Verranno mantenute almeno le ${keep} copie più recenti per ogni database.`)) {
+            return;
+        }
+
+        const btn = document.getElementById('btn-cleanup-trash');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Pulizia in corso...';
+        }
+
+        apiRequest("{{ route('backup.trash.cleanup') }}", { method: 'POST', body: {} })
+            .then(res => {
+                showTrashFeedback(res.message || 'Pulizia cestino completata.', !!res.status);
+                if (res.trash) {
+                    trashDataByConnection = res.trash;
+                    renderTrashTable();
+                } else {
+                    loadTrashFiles();
+                }
+                loadLogs();
+            })
+            .catch(err => {
+                showTrashFeedback('Errore pulizia cestino: ' + err.message, false);
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Pulisci Cestino Ora';
+                }
+            });
+    }
+
     // Initialize on load
     window.addEventListener('DOMContentLoaded', () => {
         renderRecipientsTable();
         renderHistoryTable();
+        renderTrashTable();
         toggleSmtpMode();
         loadLogs();
     });

@@ -19,7 +19,25 @@ class LinuxSmbDriver implements FilesystemDriver
     {
         $this->user = (string) config('backup-database.smb_user', '');
         $this->password = (string) config('backup-database.smb_password', '');
-        $this->binPath = (string) config('backup-database.bin_paths.smbclient', 'smbclient');
+        $configuredBin = (string) config('backup-database.bin_paths.smbclient', 'smbclient');
+        $this->binPath = $this->resolveBinPath($configuredBin);
+    }
+
+    protected function resolveBinPath(string $configured): string
+    {
+        $configured = trim($configured);
+
+        if ($configured !== '' && $configured !== 'smbclient') {
+            return $configured;
+        }
+
+        foreach (['/usr/bin/smbclient', '/usr/local/bin/smbclient', '/bin/smbclient'] as $candidate) {
+            if (is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'smbclient';
     }
 
     public function listFiles(string $path, string $filter = '*'): array
@@ -58,6 +76,11 @@ class LinuxSmbDriver implements FilesystemDriver
         }
 
         $winPath = str_replace('/', '\\', $details['remainingPath']);
+        if (! $this->isSafeSmbArgument($winPath)) {
+            Log::warning("LinuxSmbDriver: percorso SMB non sicuro rifiutato in deleteFile: {$winPath}");
+
+            return false;
+        }
 
         $result = Process::run([
             $this->binPath,
@@ -85,6 +108,11 @@ class LinuxSmbDriver implements FilesystemDriver
 
         $sourceWinPath = str_replace('/', '\\', $details['remainingPath']);
         $targetWinPath = str_replace('/', '\\', $targetDetails['remainingPath']);
+        if (! $this->isSafeSmbArgument($sourceWinPath) || ! $this->isSafeSmbArgument($targetWinPath)) {
+            Log::warning('LinuxSmbDriver: percorso SMB non sicuro rifiutato in moveFile.');
+
+            return false;
+        }
 
         // Compute parent directory on the normalized forward-slash path before converting to backslashes
         // (PHP's dirname() on Linux only splits on '/', not '\').
@@ -120,6 +148,11 @@ class LinuxSmbDriver implements FilesystemDriver
         }
 
         return true;
+    }
+
+    protected function isSafeSmbArgument(string $value): bool
+    {
+        return $value !== '' && ! preg_match('/["*;?\r\n\0]/', $value);
     }
 
     protected function parseSmbPath(string $path): ?array

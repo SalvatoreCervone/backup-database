@@ -123,6 +123,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trash Retention (Soft-Deleted Backups)
+    |--------------------------------------------------------------------------
+    |
+    | Control automatic permanent deletion of backups inside the 'trash' folder.
+    | When 'auto_delete' is enabled, at least 'keep_copies' newest trashed
+    | backups per database are always preserved; older copies beyond that
+    | threshold are permanently deleted (optionally also requiring them to be
+    | older than 'days_for_delete' days). These settings can also be managed
+    | from the web dashboard panel.
+    |
+    */
+
+    'trash' => [
+        'auto_delete' => env('BACKUP_TRASH_AUTO_DELETE', false),
+        'keep_copies' => env('BACKUP_TRASH_KEEP_COPIES', 2),
+        'days_for_delete' => env('BACKUP_TRASH_DAYS_FOR_DELETE'),
+        'settings_path' => env('BACKUP_TRASH_SETTINGS_PATH'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Logging
     |--------------------------------------------------------------------------
     |

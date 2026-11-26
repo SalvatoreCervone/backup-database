@@ -81,6 +81,37 @@ class PathValidator
     }
 
     /**
+     * Validate a basename-only filename inside the 'trash' subdirectory of a configured connection.
+     *
+     * @throws BackupException If the filename contains directory traversal or connection not found
+     */
+    public static function validateTrashFileName(string $fileName, string $connectionName): string
+    {
+        if (empty($fileName)) {
+            throw new BackupException('Il nome del file non può essere vuoto.');
+        }
+
+        if (
+            preg_match('/[\/\\\\]/', $fileName)
+            || str_contains($fileName, '..')
+            || ! preg_match('/^[A-Za-z0-9._-]+\.(bak|sql)$/i', $fileName)
+        ) {
+            throw new BackupException('Il nome del file contiene caratteri o estensione non validi.');
+        }
+
+        $connections = config('backup-database.listconnections', []);
+        $connection = collect($connections)->firstWhere('connection', $connectionName);
+
+        if (! $connection || empty($connection['destinationpath'])) {
+            throw new BackupException("Configurazione connessione '{$connectionName}' non trovata.");
+        }
+
+        $basePath = self::normalizePath($connection['destinationpath']);
+
+        return $basePath.'trash'.DIRECTORY_SEPARATOR.$fileName;
+    }
+
+    /**
      * Gather all configured destination paths for backup connections.
      */
     protected static function getAllowedPaths(): array

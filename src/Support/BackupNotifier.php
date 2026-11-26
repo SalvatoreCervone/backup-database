@@ -41,15 +41,22 @@ class BackupNotifier
     }
 
     /**
-     * Send failure notification for a failed connection backup.
+     * Send a single consolidated failure notification for the entire backup set.
+     *
+     * @param  array<int, array<string, mixed>>|string  $connectionResultsOrName
+     * @param  array<int, array<string, mixed>>|string  $cleanupResultsOrError
      */
-    public function notifyFailure(string $connectionName, string $errorMessage): void
+    public function notifyFailure(array|string $connectionResultsOrName, array|string $cleanupResultsOrError = []): void
     {
         if (! $this->settings->shouldNotifyOnFailure()) {
             return;
         }
 
-        $this->dispatch(new BackupFailedMail($connectionName, $errorMessage));
+        if (is_array($connectionResultsOrName) && empty($connectionResultsOrName)) {
+            return;
+        }
+
+        $this->dispatch(new BackupFailedMail($connectionResultsOrName, $cleanupResultsOrError));
     }
 
     /**
