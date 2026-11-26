@@ -609,6 +609,11 @@ it('rejects SMB wildcards, command injection characters, and non-backup extensio
         expect(fn () => PathValidator::validateTrashFileName($malicious, 'mysql'))
             ->toThrow(BackupException::class);
     }
+
+    // Valid filenames with spaces, parentheses, or accents must be accepted
+    foreach (['20261126_080000_My DB (prod).bak', '20261126_080000_contabilità_2026-11-26.sql'] as $valid) {
+        expect(PathValidator::validateTrashFileName($valid, 'mysql'))->toEndWith($valid);
+    }
 });
 
 it('does not collide across databases with shared prefixes like app vs app_logs', function () {

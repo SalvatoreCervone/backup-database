@@ -152,7 +152,7 @@ class LinuxSmbDriver implements FilesystemDriver
 
     protected function isSafeSmbArgument(string $value): bool
     {
-        return $value !== '' && ! preg_match('/["*;?\r\n\0]/', $value);
+        return $value !== '' && ! preg_match('/["*;?!\x00-\x1F\x7F]/', $value);
     }
 
     protected function parseSmbPath(string $path): ?array

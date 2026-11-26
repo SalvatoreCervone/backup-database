@@ -92,9 +92,9 @@ class PathValidator
         }
 
         if (
-            preg_match('/[\/\\\\]/', $fileName)
+            preg_match('/[\/\\\\"*;?!\x00-\x1F\x7F]/', $fileName)
             || str_contains($fileName, '..')
-            || ! preg_match('/^[A-Za-z0-9._-]+\.(bak|sql)$/i', $fileName)
+            || ! preg_match('/\.(bak|sql)$/i', $fileName)
         ) {
             throw new BackupException('Il nome del file contiene caratteri o estensione non validi.');
         }
